@@ -5,6 +5,8 @@ from pathlib import Path
 
 import click
 
+from prototype.render import render_public_receipt
+from prototype.schemas import PublicReceipt
 from prototype import transcript
 
 
@@ -35,9 +37,20 @@ def parse_pr(ctx, param, value):
 @click.option("--pr", "pr_number", required=True, callback=parse_pr, help="PR number or GitHub PR URL.")
 def cli(transcript_path, pr_number):
     loaded_transcript = transcript.load_transcript(transcript_path)
+    receipt = PublicReceipt(
+        status="Caution",
+        policy_fit="",
+        human_ownership="",
+        ai_role="",
+        evidence_reviewed="",
+        tests_checks_run="",
+        reviewer_attention_requested="",
+        known_risks_or_unknowns="",
+        recommended_next_step="",
+        receipt_binding="",
+    )
 
-    click.echo(f"Transcript: {loaded_transcript.path}")
-    click.echo(f"PR: {pr_number}")
+    click.echo(render_public_receipt(receipt), nl=False)
 
 
 if __name__ == "__main__":

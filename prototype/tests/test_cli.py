@@ -21,8 +21,10 @@ def test_numeric_pr_succeeds_with_transcript_file(tmp_path):
     result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "3"])
 
     assert result.exit_code == 0
-    assert f"Transcript: {transcript_path}" in result.output
-    assert "PR: 3" in result.output
+    assert "BuiltWithAi PR Ownership Receipt" in result.output
+    assert "Status: Caution" in result.output
+    assert "Transcript:" not in result.output
+    assert "PR: 3" not in result.output
 
 
 @patch("prototype.transcript.load_transcript")
@@ -51,7 +53,8 @@ def test_github_pr_url_succeeds_and_extracts_number(tmp_path):
     )
 
     assert result.exit_code == 0
-    assert "PR: 17" in result.output
+    assert "BuiltWithAi PR Ownership Receipt" in result.output
+    assert "Status: Caution" in result.output
 
 
 def test_missing_pr_fails_with_required_option_error(tmp_path):
@@ -81,4 +84,4 @@ def test_missing_transcript_path_fails_before_command_execution(tmp_path):
 
     assert result.exit_code != 0
     assert "does not exist" in result.output
-    assert "Transcript:" not in result.output
+    assert "BuiltWithAi PR Ownership Receipt" not in result.output
