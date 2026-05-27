@@ -14,6 +14,10 @@ Do not add params, flags, fields, modules, abstractions, normalization, configur
 - `site/src/content/blog/`: Markdown blog posts.
 - `site/src/styles/`: global CSS and theme variables.
 
+# Python prototype
+
+Run prototype CLI modules from the repository root with `python3 -m prototype.cli ...`, not `python3 prototype/cli.py ...`. Prefer normal package imports such as `from prototype import transcript`; do not add script-mode fallback imports just to support direct file execution.
+
 # Summary additions
 
 

@@ -5,6 +5,8 @@ from pathlib import Path
 
 import click
 
+from prototype import transcript
+
 
 _GITHUB_PR_URL_RE = re.compile(
     r"^https://github\.com/[^/]+/[^/]+/pull/(?P<number>[1-9][0-9]*)/?$"
@@ -32,7 +34,9 @@ def parse_pr(ctx, param, value):
 )
 @click.option("--pr", "pr_number", required=True, callback=parse_pr, help="PR number or GitHub PR URL.")
 def cli(transcript_path, pr_number):
-    click.echo(f"Transcript: {transcript_path}")
+    loaded_transcript = transcript.load_transcript(transcript_path)
+
+    click.echo(f"Transcript: {loaded_transcript.path}")
     click.echo(f"PR: {pr_number}")
 
 
