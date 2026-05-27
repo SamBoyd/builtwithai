@@ -132,6 +132,26 @@ class TestGetPullRequestContext:
         with pytest.raises(GitHubContextError, match="set GITHUB_TOKEN"):
             get_pull_request_context("owner/repo", 3)
 
+    def test_reports_authentication_errors_readably(self, github_class, monkeypatch):
+        monkeypatch.setenv("GITHUB_TOKEN", "bad-token")
+        github_class.return_value.get_repo.side_effect = self.GitHubError(401, "Bad credentials")
+
+        with pytest.raises(
+            GitHubContextError,
+            match="GitHub authentication failed; check that GITHUB_TOKEN is set to a valid token.",
+        ):
+            get_pull_request_context("owner/repo", 3)
+
+    def test_reports_inaccessible_repository_readably(self, github_class, monkeypatch):
+        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+        github_class.return_value.get_repo.side_effect = self.GitHubError(404, "Not Found")
+
+        with pytest.raises(
+            GitHubContextError,
+            match="could not access owner/repo; check the repository name and GITHUB_TOKEN access.",
+        ):
+            get_pull_request_context("owner/repo", 3)
+
     def test_reports_missing_pr_readably(self, github_class, monkeypatch):
         monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
         repo = github_class.return_value.get_repo.return_value
@@ -142,3 +162,27 @@ class TestGetPullRequestContext:
             match="could not find PR #99 in owner/repo",
         ):
             get_pull_request_context("owner/repo", 99)
+
+    def test_reports_rate_limit_errors_readably(self, github_class, monkeypatch):
+        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+        github_class.return_value.get_repo.side_effect = self.GitHubError(403, "API rate limit exceeded")
+
+        with pytest.raises(
+            GitHubContextError,
+            match="GitHub API rate limit exceeded; set GITHUB_TOKEN or wait for the rate limit to reset.",
+        ):
+            get_pull_request_context("owner/repo", 3)
+
+    def test_reports_permission_errors_readably(self, github_class, monkeypatch):
+        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+        repo = github_class.return_value.get_repo.return_value
+        repo.get_pull.side_effect = self.GitHubError(403, "Resource not accessible by personal access token")
+
+        with pytest.raises(
+            GitHubContextError,
+            match=(
+                "GITHUB_TOKEN does not have permission to read PRs for owner/repo; "
+                "use a token with read-only Pull requests and Metadata access."
+            ),
+        ):
+            get_pull_request_context("owner/repo", 3)

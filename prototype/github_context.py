@@ -101,6 +101,28 @@ def resolve_repository(
     raise GitHubContextError('could not infer GitHub repository; pass "--repo owner/name"')
 
 
+def _github_error_message(error: Exception, repo: str, pr_number: int, token: str | None, scope: str) -> str:
+    status = getattr(error, "status", None)
+    error_text = str(error).lower()
+
+    if status == 401:
+        return "GitHub authentication failed; check that GITHUB_TOKEN is set to a valid token."
+    if status == 403 and "rate limit" in error_text:
+        return "GitHub API rate limit exceeded; set GITHUB_TOKEN or wait for the rate limit to reset."
+    if status == 403:
+        return (
+            f"GITHUB_TOKEN does not have permission to read PRs for {repo}; "
+            "use a token with read-only Pull requests and Metadata access."
+        )
+    if status == 404 and scope == "repo":
+        return f"could not access {repo}; check the repository name and GITHUB_TOKEN access."
+    if status == 404:
+        return f"could not find PR #{pr_number} in {repo}; check the PR number and repository."
+    if token:
+        return f"could not fetch GitHub PR context: {error}"
+    return f"could not fetch GitHub PR context: {error}. For private repositories or rate limits, set GITHUB_TOKEN."
+
+
 def get_pull_request_context(repo: str, pr_number: int) -> PullRequestContext:
     if Github is None:
         raise GitHubContextError("PyGithub is required to fetch GitHub PR context")
@@ -109,17 +131,14 @@ def get_pull_request_context(repo: str, pr_number: int) -> PullRequestContext:
     github_client = Github(token) if token else Github()
 
     try:
-        pull = github_client.get_repo(repo).get_pull(pr_number)
+        repository = github_client.get_repo(repo)
     except Exception as error:
-        if getattr(error, "status", None) == 404:
-            raise GitHubContextError(
-                f"could not find PR #{pr_number} in {repo}; check the PR number and repository"
-            ) from error
-        if token:
-            raise GitHubContextError(f"could not fetch GitHub PR context: {error}") from error
-        raise GitHubContextError(
-            f"could not fetch GitHub PR context: {error}. For private repositories or rate limits, set GITHUB_TOKEN."
-        ) from error
+        raise GitHubContextError(_github_error_message(error, repo, pr_number, token, "repo")) from error
+
+    try:
+        pull = repository.get_pull(pr_number)
+    except Exception as error:
+        raise GitHubContextError(_github_error_message(error, repo, pr_number, token, "pr")) from error
 
     return PullRequestContext(
         number=pull.number,
