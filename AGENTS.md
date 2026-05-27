@@ -1,6 +1,8 @@
 # Software Development Principles
 
-We follow strict YAGNI and KISS: choose the smallest change that satisfies the current requirement, and avoid adding fields, modules, normalization, overrides, or future-facing behavior until a concrete caller needs it.
+We follow strict YAGNI and KISS: choose the smallest change that satisfies the current requirement.
+
+Do not add params, flags, fields, modules, abstractions, normalization, configurability, fallback paths, or future-facing behavior until the requirement being implemented needs them. Introduce each new knob only at the commit where a concrete caller or test exercises it.
 
 # Project structure
 
