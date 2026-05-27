@@ -20,6 +20,10 @@ Run prototype CLI modules from the repository root with `python3 -m prototype.cl
 
 When adding Python dependencies to a requirements file, pin each dependency to the latest available version from `pip index versions <package>`.
 
+When unit testing a Python module, mock that module's collaborators from other project modules. A unit test should fail because the unit under test changed, not because an imported helper's implementation changed. Cover helper behavior in that helper module's own tests, and let higher-level integration tests exercise the real collaboration.
+
+Group pytest tests into classes by unit or behavior under test, for example `class TestResolveRepository:`. Prefer class names that make the tested function, class, or workflow obvious when scanning the file. Use class-level patches or small class helpers when several tests in the group share the same mocked dependency or setup.
+
 # Summary additions
 
 
