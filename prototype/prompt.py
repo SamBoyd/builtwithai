@@ -15,7 +15,6 @@ Use the provided transcript, PR context, issue context, and policy context only.
 Keep the public receipt compact and maintainer-facing. Do not reveal private transcript details unnecessarily in the public receipt. Never claim policy compliance when no policy text was provided.
 
 Return structured output matching the provided Pydantic schema:
-- private_evaluation
 - public_receipt
 
 Public receipt fields:

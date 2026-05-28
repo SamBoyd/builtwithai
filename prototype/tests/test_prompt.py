@@ -118,3 +118,22 @@ class TestBuildReceiptPrompt:
         ]
         for field in expected_fields:
             assert f"- {field}" in prompt
+
+    def test_requests_current_receipt_result_schema(self):
+        loaded_transcript = Transcript(
+            path=Path("transcripts/session.txt"),
+            mode="text",
+            content="user: keep the receipt focused",
+        )
+        pr_context = PullRequestContext(
+            number=3,
+            title="Add receipt context",
+            body="",
+            url="https://github.com/owner/repo/pull/3",
+            head_sha="abc123",
+        )
+
+        prompt = build_receipt_prompt(loaded_transcript, pr_context)
+
+        assert "- public_receipt" in prompt
+        assert "private_evaluation" not in prompt
