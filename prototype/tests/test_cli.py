@@ -12,6 +12,10 @@ def pr_reference(number=3, repo=None):
     return SimpleNamespace(number=number, repo=repo)
 
 
+def issue_reference(number=1, repo=None):
+    return SimpleNamespace(number=number, repo=repo)
+
+
 def pr_context(
     number=3, title="Add receipt context", body="", url=None, head_sha="abc123"
 ):
@@ -22,6 +26,10 @@ def pr_context(
         url=url or f"https://github.com/owner/repo/pull/{number}",
         head_sha=head_sha,
     )
+
+
+def issue_context(number=1, title="Support issue context", body="Issue body"):
+    return SimpleNamespace(number=number, title=title, body=body)
 
 
 def receipt_result(
@@ -49,6 +57,7 @@ def test_help_shows_required_cli_surface():
     assert result.exit_code == 0
     assert "TRANSCRIPT_PATH" in result.output
     assert "--pr" in result.output
+    assert "--issue" in result.output
     assert "--repo" in result.output
 
 
@@ -131,6 +140,51 @@ def test_cli_loads_transcript_path(
     assert result.exit_code == 0
     load_transcript.assert_called_once_with(transcript_path)
     build_receipt_prompt.assert_called_once_with(loaded_transcript, pr)
+    generate_receipt.assert_called_once_with("receipt prompt")
+
+
+@patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+@patch("prototype.cli.resolve_repository", return_value="owner/repo")
+@patch("prototype.cli.get_issue_context")
+@patch("prototype.cli.get_pull_request_context")
+@patch("prototype.cli.generate_receipt")
+@patch("prototype.cli.build_receipt_prompt", return_value="receipt prompt")
+@patch("prototype.cli.parse_issue_reference", return_value=issue_reference(number=1))
+@patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+@patch("prototype.transcript.load_transcript")
+def test_cli_fetches_explicit_issue_context(
+    load_transcript,
+    parse_pr_reference,
+    parse_issue_reference,
+    build_receipt_prompt,
+    generate_receipt,
+    get_pull_request_context,
+    get_issue_context,
+    resolve_repository,
+    get_origin_repository,
+    tmp_path,
+):
+    loaded_transcript = SimpleNamespace(
+        path=tmp_path / "transcript.txt", mode="text", content="content"
+    )
+    pr = pr_context()
+    issue = issue_context(number=1, title="Original request")
+    load_transcript.return_value = loaded_transcript
+    get_pull_request_context.return_value = pr
+    get_issue_context.return_value = issue
+    generate_receipt.return_value = receipt_result()
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+
+    result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "3", "--issue", "1"])
+
+    assert result.exit_code == 0
+    parse_pr_reference.assert_called_once_with("3")
+    parse_issue_reference.assert_called_once_with("1")
+    resolve_repository.assert_called_once_with(None, None, get_origin_repository)
+    get_pull_request_context.assert_called_once_with("owner/repo", 3)
+    get_issue_context.assert_called_once_with("owner/repo", 1)
+    build_receipt_prompt.assert_called_once_with(loaded_transcript, pr, issue)
     generate_receipt.assert_called_once_with("receipt prompt")
 
 
@@ -351,6 +405,60 @@ def test_invalid_pr_fails_with_actionable_message(tmp_path):
 
     assert result.exit_code != 0
     assert "PR must be a positive integer or GitHub PR URL" in result.output
+
+
+def test_invalid_issue_fails_with_actionable_message(tmp_path):
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+
+    with patch(
+        "prototype.cli.parse_issue_reference",
+        side_effect=GitHubContextError("issue must be a positive integer or GitHub issue URL"),
+    ):
+        result = CliRunner().invoke(
+            cli,
+            [str(transcript_path), "--pr", "3", "--issue", "not-an-issue"],
+        )
+
+    assert result.exit_code != 0
+    assert "issue must be a positive integer or GitHub issue URL" in result.output
+
+
+@patch("prototype.cli.resolve_repository", return_value="owner/repo")
+@patch("prototype.cli.get_pull_request_context")
+@patch("prototype.cli.get_issue_context")
+@patch("prototype.cli.parse_issue_reference", return_value=issue_reference(number=1, repo="other/repo"))
+@patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+@patch("prototype.transcript.load_transcript")
+def test_issue_url_repository_mismatch_fails(
+    load_transcript,
+    parse_pr_reference,
+    parse_issue_reference,
+    get_issue_context,
+    get_pull_request_context,
+    resolve_repository,
+    tmp_path,
+):
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            str(transcript_path),
+            "--pr",
+            "3",
+            "--issue",
+            "https://github.com/other/repo/issues/1",
+        ],
+    )
+
+    assert result.exit_code != 0
+    parse_pr_reference.assert_called_once_with("3")
+    parse_issue_reference.assert_called_once_with("https://github.com/other/repo/issues/1")
+    assert 'issue URL repository "other/repo" does not match repository "owner/repo"' in result.output
+    get_pull_request_context.assert_not_called()
+    get_issue_context.assert_not_called()
 
 
 def test_missing_transcript_path_fails_before_command_execution(tmp_path):

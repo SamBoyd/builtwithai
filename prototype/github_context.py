@@ -12,6 +12,9 @@ except ImportError:  # pragma: no cover - exercised only when dependency is abse
 _GITHUB_PR_URL_RE = re.compile(
     r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<number>[1-9][0-9]*)/?$"
 )
+_GITHUB_ISSUE_URL_RE = re.compile(
+    r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/issues/(?P<number>[1-9][0-9]*)/?$"
+)
 _GITHUB_REPO_RE = re.compile(r"^[^/\s]+/[^/\s]+$")
 _SSH_REMOTE_RE = re.compile(r"^git@github\.com:(?P<repo>[^/]+/[^/]+?)(?:\.git)?$")
 _HTTPS_REMOTE_RE = re.compile(r"^https://github\.com/(?P<repo>[^/]+/[^/]+?)(?:\.git)?$")
@@ -36,6 +39,19 @@ class PullRequestContext:
     head_sha: str
 
 
+@dataclass(frozen=True)
+class IssueReference:
+    number: int
+    repo: str | None
+
+
+@dataclass(frozen=True)
+class IssueContext:
+    number: int
+    title: str
+    body: str
+
+
 def parse_pr_reference(value: str) -> PullRequestReference:
     if value.isdigit():
         pr_number = int(value)
@@ -50,6 +66,22 @@ def parse_pr_reference(value: str) -> PullRequestReference:
         )
 
     raise GitHubContextError("PR must be a positive integer or GitHub PR URL")
+
+
+def parse_issue_reference(value: str) -> IssueReference:
+    if value.isdigit():
+        issue_number = int(value)
+        if issue_number > 0:
+            return IssueReference(number=issue_number, repo=None)
+
+    match = _GITHUB_ISSUE_URL_RE.match(value)
+    if match:
+        return IssueReference(
+            number=int(match.group("number")),
+            repo=f"{match.group('owner')}/{match.group('repo')}",
+        )
+
+    raise GitHubContextError("issue must be a positive integer or GitHub issue URL")
 
 
 def validate_repo(value: str) -> str:
@@ -101,7 +133,17 @@ def resolve_repository(
     raise GitHubContextError('could not infer GitHub repository; pass "--repo owner/name"')
 
 
-def _github_error_message(error: Exception, repo: str, pr_number: int, token: str | None, scope: str) -> str:
+def _github_error_message(
+    error: Exception,
+    repo: str,
+    number: int,
+    token: str | None,
+    scope: str,
+    *,
+    context_name: str,
+    permission_name: str,
+    permission_guidance: str,
+) -> str:
     status = getattr(error, "status", None)
     error_text = str(error).lower()
 
@@ -111,16 +153,19 @@ def _github_error_message(error: Exception, repo: str, pr_number: int, token: st
         return "GitHub API rate limit exceeded; set GITHUB_TOKEN or wait for the rate limit to reset."
     if status == 403:
         return (
-            f"GITHUB_TOKEN does not have permission to read PRs for {repo}; "
-            "use a token with read-only Pull requests and Metadata access."
+            f"GITHUB_TOKEN does not have permission to read {permission_name} for {repo}; "
+            f"use a token with read-only {permission_guidance} and Metadata access."
         )
     if status == 404 and scope == "repo":
         return f"could not access {repo}; check the repository name and GITHUB_TOKEN access."
     if status == 404:
-        return f"could not find PR #{pr_number} in {repo}; check the PR number and repository."
+        return f"could not find {context_name} #{number} in {repo}; check the {context_name} number and repository."
     if token:
-        return f"could not fetch GitHub PR context: {error}"
-    return f"could not fetch GitHub PR context: {error}. For private repositories or rate limits, set GITHUB_TOKEN."
+        return f"could not fetch GitHub {context_name} context: {error}"
+    return (
+        f"could not fetch GitHub {context_name} context: {error}. "
+        "For private repositories or rate limits, set GITHUB_TOKEN."
+    )
 
 
 def get_pull_request_context(repo: str, pr_number: int) -> PullRequestContext:
@@ -133,12 +178,34 @@ def get_pull_request_context(repo: str, pr_number: int) -> PullRequestContext:
     try:
         repository = github_client.get_repo(repo)
     except Exception as error:
-        raise GitHubContextError(_github_error_message(error, repo, pr_number, token, "repo")) from error
+        raise GitHubContextError(
+            _github_error_message(
+                error,
+                repo,
+                pr_number,
+                token,
+                "repo",
+                context_name="PR",
+                permission_name="PRs",
+                permission_guidance="Pull requests",
+            )
+        ) from error
 
     try:
         pull = repository.get_pull(pr_number)
     except Exception as error:
-        raise GitHubContextError(_github_error_message(error, repo, pr_number, token, "pr")) from error
+        raise GitHubContextError(
+            _github_error_message(
+                error,
+                repo,
+                pr_number,
+                token,
+                "pr",
+                context_name="PR",
+                permission_name="PRs",
+                permission_guidance="Pull requests",
+            )
+        ) from error
 
     return PullRequestContext(
         number=pull.number,
@@ -146,4 +213,50 @@ def get_pull_request_context(repo: str, pr_number: int) -> PullRequestContext:
         body=pull.body or "",
         url=pull.html_url,
         head_sha=pull.head.sha,
+    )
+
+
+def get_issue_context(repo: str, issue_number: int) -> IssueContext:
+    if Github is None:
+        raise GitHubContextError("PyGithub is required to fetch GitHub issue context")
+
+    token = os.environ.get("GITHUB_TOKEN")
+    github_client = Github(token) if token else Github()
+
+    try:
+        repository = github_client.get_repo(repo)
+    except Exception as error:
+        raise GitHubContextError(
+            _github_error_message(
+                error,
+                repo,
+                issue_number,
+                token,
+                "repo",
+                context_name="issue",
+                permission_name="issues",
+                permission_guidance="Issues",
+            )
+        ) from error
+
+    try:
+        issue = repository.get_issue(issue_number)
+    except Exception as error:
+        raise GitHubContextError(
+            _github_error_message(
+                error,
+                repo,
+                issue_number,
+                token,
+                "issue",
+                context_name="issue",
+                permission_name="issues",
+                permission_guidance="Issues",
+            )
+        ) from error
+
+    return IssueContext(
+        number=issue.number,
+        title=issue.title,
+        body=issue.body or "",
     )

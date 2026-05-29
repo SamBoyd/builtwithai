@@ -1,4 +1,4 @@
-from prototype.github_context import PullRequestContext
+from prototype.github_context import IssueContext, PullRequestContext
 from prototype.transcript import Transcript
 
 
@@ -58,13 +58,28 @@ PR body: {pr_body}
 PR URL: {pr_url}
 PR head SHA: {pr_head_sha}
 
-Issue context: no issue context provided
+{issue_context}
 
 Policy context: no policy found
 """
 
 
-def build_receipt_prompt(loaded_transcript: Transcript, pr_context: PullRequestContext) -> str:
+def format_issue_context(issue_context: IssueContext | None) -> str:
+    if issue_context is None:
+        return "Issue context: no issue context provided"
+    return (
+        "Issue context:\n"
+        f"Issue number: {issue_context.number}\n"
+        f"Issue title: {issue_context.title}\n"
+        f"Issue body: {issue_context.body}"
+    )
+
+
+def build_receipt_prompt(
+    loaded_transcript: Transcript,
+    pr_context: PullRequestContext,
+    issue_context: IssueContext | None = None,
+) -> str:
     return PROMPT_TEMPLATE.format(
         transcript_path=loaded_transcript.path,
         transcript_mode=loaded_transcript.mode,
@@ -74,4 +89,5 @@ def build_receipt_prompt(loaded_transcript: Transcript, pr_context: PullRequestC
         pr_body=pr_context.body,
         pr_url=pr_context.url,
         pr_head_sha=pr_context.head_sha,
+        issue_context=format_issue_context(issue_context),
     )

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from prototype.github_context import PullRequestContext
+from prototype.github_context import IssueContext, PullRequestContext
 from prototype.prompt import build_receipt_prompt
 from prototype.transcript import Transcript
 
@@ -87,6 +87,33 @@ class TestBuildReceiptPrompt:
 
         assert "Issue context: no issue context provided" in prompt
         assert "Policy context: no policy found" in prompt
+
+    def test_includes_issue_context_when_provided(self):
+        loaded_transcript = Transcript(
+            path=Path("transcripts/session.txt"),
+            mode="text",
+            content="user: please implement the issue exactly",
+        )
+        pr_context = PullRequestContext(
+            number=3,
+            title="Add receipt context",
+            body="",
+            url="https://github.com/owner/repo/pull/3",
+            head_sha="abc123",
+        )
+        issue_context = IssueContext(
+            number=1,
+            title="Support issue context",
+            body="The receipt should know the original request.",
+        )
+
+        prompt = build_receipt_prompt(loaded_transcript, pr_context, issue_context)
+
+        assert "Issue context:\n" in prompt
+        assert "Issue number: 1" in prompt
+        assert "Issue title: Support issue context" in prompt
+        assert "Issue body: The receipt should know the original request." in prompt
+        assert "Issue context: no issue context provided" not in prompt
 
     def test_names_public_receipt_fields(self):
         loaded_transcript = Transcript(
