@@ -51,17 +51,23 @@ Transcript mode: {transcript_mode}
 Transcript:
 {transcript_content}
 
-PR context:
-PR number: {pr_number}
-PR title: {pr_title}
-PR body: {pr_body}
-PR URL: {pr_url}
-PR head SHA: {pr_head_sha}
+{pr_context}
 
 {issue_context}
 
 Policy context: no policy found
 """
+
+
+def format_pr_context(pr_context: PullRequestContext) -> str:
+    return (
+        "PR context:\n"
+        f"PR number: {pr_context.number}\n"
+        f"PR title: {pr_context.title}\n"
+        f"PR body: {pr_context.body}\n"
+        f"PR URL: {pr_context.url}\n"
+        f"PR head SHA: {pr_context.head_sha}"
+    )
 
 
 def format_issue_context(issue_context: IssueContext | None) -> str:
@@ -74,7 +80,6 @@ def format_issue_context(issue_context: IssueContext | None) -> str:
         f"Issue body: {issue_context.body}"
     )
 
-
 def build_receipt_prompt(
     loaded_transcript: Transcript,
     pr_context: PullRequestContext,
@@ -84,10 +89,7 @@ def build_receipt_prompt(
         transcript_path=loaded_transcript.path,
         transcript_mode=loaded_transcript.mode,
         transcript_content=loaded_transcript.content,
-        pr_number=pr_context.number,
-        pr_title=pr_context.title,
-        pr_body=pr_context.body,
-        pr_url=pr_context.url,
-        pr_head_sha=pr_context.head_sha,
-        issue_context=format_issue_context(issue_context),
+
+        pr_context=format_pr_context(pr_context),
+        issue_context=format_issue_context(issue_context)
     )
