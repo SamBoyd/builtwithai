@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from prototype.schemas import PublicReceipt, ReceiptResult
+from prototype.schemas import OwnershipRubricAnswer, PrivateEvaluation, PublicReceipt, ReceiptResult
 
 
 def make_receipt_result():
@@ -18,7 +18,16 @@ def make_receipt_result():
             known_risks_or_unknowns="No issue or policy context was provided.",
             recommended_next_step="Review with caution.",
             receipt_binding="PR #3.",
-        )
+        ),
+        private_evaluation=PrivateEvaluation(
+            ownership_rubric_answers=[
+                OwnershipRubricAnswer(
+                    question="Did they steer the work rather than merely accept generated output?",
+                    evidence_level="weak",
+                    evidence="The transcript shows limited contributor steering.",
+                )
+            ]
+        ),
     )
 
 

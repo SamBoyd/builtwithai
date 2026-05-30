@@ -15,7 +15,7 @@ from prototype.github_context import (
 from prototype.llm_client import LLMClientError, generate_receipt
 from prototype.policy import PolicyContextError, get_repository_root, load_policy_context
 from prototype.prompt import build_receipt_prompt
-from prototype.render import render_public_receipt
+from prototype.render import render_private_evaluation, render_public_receipt
 from prototype import transcript
 
 
@@ -59,7 +59,36 @@ def parse_repo(ctx, param, value):
     help="Repository AI or contribution policy file.",
 )
 @click.option("--repo", "repo_name", callback=parse_repo, help='GitHub repository in "owner/name" format.')
-def cli(transcript_path, pr_number, issue_number, policy_path, repo_name):
+@click.option(
+    "--show-private-eval",
+    is_flag=True,
+    help="Print the private heuristic evaluation after the public receipt.",
+)
+@click.option(
+    "--private-eval-output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the private heuristic evaluation JSON to this file.",
+)
+@click.option(
+    "--overwrite",
+    is_flag=True,
+    help="Allow overwriting an existing private evaluation output file.",
+)
+def cli(
+    transcript_path,
+    pr_number,
+    issue_number,
+    policy_path,
+    repo_name,
+    show_private_eval,
+    private_eval_output,
+    overwrite,
+):
+    if private_eval_output is not None and private_eval_output.exists() and not overwrite:
+        raise click.ClickException(
+            f'private evaluation output file "{private_eval_output}" already exists; pass --overwrite to replace it'
+        )
+
     loaded_transcript = transcript.load_transcript(transcript_path)
     try:
         repository = resolve_repository(pr_number.repo, repo_name, get_origin_repository)
@@ -91,7 +120,14 @@ def cli(transcript_path, pr_number, issue_number, policy_path, repo_name):
     except LLMClientError as error:
         raise click.ClickException(str(error)) from error
 
+    private_evaluation_json = render_private_evaluation(receipt_result.private_evaluation)
+    if private_eval_output is not None:
+        private_eval_output.write_text(private_evaluation_json, encoding="utf-8")
+
     click.echo(render_public_receipt(receipt_result.public_receipt), nl=False)
+    if show_private_eval:
+        click.echo("\nPrivate heuristic evaluation\n")
+        click.echo(private_evaluation_json, nl=False)
 
 
 if __name__ == "__main__":

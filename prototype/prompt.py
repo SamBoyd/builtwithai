@@ -17,6 +17,7 @@ Keep the public receipt compact and maintainer-facing. Do not reveal private tra
 
 Return structured output matching the provided Pydantic schema:
 - public_receipt
+- private_evaluation
 
 Public receipt fields:
 - status
@@ -30,7 +31,15 @@ Public receipt fields:
 - recommended_next_step
 - receipt_binding
 
-Ownership rubric questions:
+Private evaluation fields:
+- ownership_rubric_answers
+
+Each ownership_rubric_answers item must include:
+- question
+- evidence_level
+- evidence
+
+Answer these ownership rubric questions in private_evaluation:
 1. Did the contributor understand the issue before implementation?
 2. Did they ask clarifying questions or challenge assumptions?
 3. Did they evaluate alternative solutions?
@@ -39,7 +48,7 @@ Ownership rubric questions:
 6. Did they notice missing tests, edge cases, or refactor opportunities?
 7. Did they steer the work rather than merely accept generated output?
 8. Did they review the final change in relation to the original issue?
-9. Did the transcript expose remaining risks or unknowns?
+9. Did they show they could answer maintainer questions?
 
 Evidence levels:
 - visible: the transcript directly shows the contributor doing the relevant ownership work.

@@ -1,4 +1,4 @@
-from prototype.schemas import PublicReceipt
+from prototype.schemas import PrivateEvaluation, PublicReceipt
 
 
 def render_public_receipt(receipt: PublicReceipt) -> str:
@@ -25,3 +25,7 @@ def render_public_receipt(receipt: PublicReceipt) -> str:
         "\n"
         f"Receipt binding: {receipt.receipt_binding}\n"
     )
+
+
+def render_private_evaluation(private_evaluation: PrivateEvaluation) -> str:
+    return f"{private_evaluation.model_dump_json(indent=2)}\n"

@@ -164,7 +164,63 @@ class TestBuildReceiptPrompt:
         prompt = build_receipt_prompt(loaded_transcript, pr_context)
 
         assert "- public_receipt" in prompt
-        assert "private_evaluation" not in prompt
+        assert "- private_evaluation" in prompt
+
+    def test_requests_private_evaluation_rubric_answers(self):
+        loaded_transcript = Transcript(
+            path=Path("transcripts/session.txt"),
+            mode="text",
+            content="user: please explain the review risk",
+        )
+        pr_context = PullRequestContext(
+            number=3,
+            title="Add private evaluation",
+            body="",
+            url="https://github.com/owner/repo/pull/3",
+            head_sha="abc123",
+        )
+
+        prompt = build_receipt_prompt(loaded_transcript, pr_context)
+
+        expected_questions = [
+            "Did the contributor understand the issue before implementation?",
+            "Did they ask clarifying questions or challenge assumptions?",
+            "Did they evaluate alternative solutions?",
+            "Did they approve or modify the plan for reasons they could explain?",
+            "Did they make tradeoff judgments?",
+            "Did they notice missing tests, edge cases, or refactor opportunities?",
+            "Did they steer the work rather than merely accept generated output?",
+            "Did they review the final change in relation to the original issue?",
+            "Did they show they could answer maintainer questions?",
+        ]
+        for question in expected_questions:
+            assert question in prompt
+
+        assert "ownership_rubric_answers" in prompt
+        assert "question" in prompt
+        assert "evidence_level" in prompt
+        assert "evidence" in prompt
+
+    def test_private_evaluation_instructions_include_evidence_levels_and_extra_questions(self):
+        loaded_transcript = Transcript(
+            path=Path("transcripts/session.txt"),
+            mode="text",
+            content="user: decide whether this needs reviewer caution",
+        )
+        pr_context = PullRequestContext(
+            number=3,
+            title="Add private evaluation",
+            body="",
+            url="https://github.com/owner/repo/pull/3",
+            head_sha="abc123",
+        )
+
+        prompt = build_receipt_prompt(loaded_transcript, pr_context)
+
+        assert "visible" in prompt
+        assert "weak" in prompt
+        assert "missing" in prompt
+        assert "contradictory" in prompt
 
     def test_includes_policy_context_when_provided(self):
         loaded_transcript = Transcript(

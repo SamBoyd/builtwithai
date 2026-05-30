@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 
 ReceiptStatus = Literal["Reviewable", "Caution", "Not recommended as PR"]
+OwnershipEvidenceLevel = Literal["visible", "weak", "missing", "contradictory"]
 
 
 class PublicReceipt(BaseModel):
@@ -19,5 +20,16 @@ class PublicReceipt(BaseModel):
     receipt_binding: str
 
 
+class OwnershipRubricAnswer(BaseModel):
+    question: str
+    evidence_level: OwnershipEvidenceLevel
+    evidence: str
+
+
+class PrivateEvaluation(BaseModel):
+    ownership_rubric_answers: list[OwnershipRubricAnswer]
+
+
 class ReceiptResult(BaseModel):
     public_receipt: PublicReceipt
+    private_evaluation: PrivateEvaluation

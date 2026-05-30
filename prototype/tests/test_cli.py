@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -6,7 +7,13 @@ from click.testing import CliRunner
 from prototype.cli import GitHubContextError, cli
 from prototype.llm_client import LLMClientError
 from prototype.policy import PolicyContext
-from prototype.schemas import PublicReceipt, ReceiptResult, ReceiptStatus
+from prototype.schemas import (
+    OwnershipRubricAnswer,
+    PrivateEvaluation,
+    PublicReceipt,
+    ReceiptResult,
+    ReceiptStatus,
+)
 
 
 def pr_reference(number=3, repo=None):
@@ -52,7 +59,16 @@ def receipt_result(
             known_risks_or_unknowns="No issue or policy context was provided.",
             recommended_next_step="Review the PR.",
             receipt_binding=receipt_binding,
-        )
+        ),
+        private_evaluation=PrivateEvaluation(
+            ownership_rubric_answers=[
+                OwnershipRubricAnswer(
+                    question="Did they steer the work rather than merely accept generated output?",
+                    evidence_level="visible",
+                    evidence="The transcript shows the contributor narrowing the requested change.",
+                )
+            ]
+        ),
     )
 
 
@@ -65,6 +81,9 @@ def test_help_shows_required_cli_surface():
     assert "--issue" in result.output
     assert "--repo" in result.output
     assert "--policy" in result.output
+    assert "--show-private-eval" in result.output
+    assert "--private-eval-output" in result.output
+    assert "--overwrite" in result.output
 
 
 @patch("prototype.cli.get_repository_root")
@@ -126,6 +145,187 @@ def test_numeric_pr_succeeds_with_transcript_file(
     assert "user secret" not in result.output
     assert "secret prompt" not in result.output
     assert "Transcript:" not in result.output
+    assert "Private heuristic evaluation" not in result.output
+    assert "ownership_rubric_answers" not in result.output
+
+
+@patch("prototype.cli.get_repository_root")
+@patch("prototype.cli.load_policy_context")
+@patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+@patch("prototype.cli.resolve_repository", return_value="owner/repo")
+@patch("prototype.cli.get_pull_request_context")
+@patch("prototype.cli.generate_receipt")
+@patch("prototype.cli.build_receipt_prompt", return_value="secret prompt")
+@patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+@patch("prototype.transcript.load_transcript")
+def test_show_private_eval_prints_public_receipt_then_private_json(
+    load_transcript,
+    parse_pr_reference,
+    build_receipt_prompt,
+    generate_receipt,
+    get_pull_request_context,
+    resolve_repository,
+    get_origin_repository,
+    load_policy_context,
+    get_repository_root,
+    tmp_path,
+):
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+    load_transcript.return_value = SimpleNamespace(
+        path=transcript_path, mode="text", content="content"
+    )
+    get_repository_root.return_value = tmp_path
+    load_policy_context.return_value = policy_context()
+    get_pull_request_context.return_value = pr_context()
+    generate_receipt.return_value = receipt_result()
+
+    result = CliRunner().invoke(
+        cli,
+        [str(transcript_path), "--pr", "3", "--show-private-eval"],
+    )
+
+    assert result.exit_code == 0
+    assert "BuiltWithAi PR Ownership Receipt" in result.output
+    assert "Private heuristic evaluation" in result.output
+    assert "ownership_rubric_answers" in result.output
+    assert result.output.index("BuiltWithAi PR Ownership Receipt") < result.output.index(
+        "Private heuristic evaluation"
+    )
+
+
+@patch("prototype.cli.get_repository_root")
+@patch("prototype.cli.load_policy_context")
+@patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+@patch("prototype.cli.resolve_repository", return_value="owner/repo")
+@patch("prototype.cli.get_pull_request_context")
+@patch("prototype.cli.generate_receipt")
+@patch("prototype.cli.build_receipt_prompt", return_value="secret prompt")
+@patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+@patch("prototype.transcript.load_transcript")
+def test_private_eval_output_writes_json_without_printing_private_eval(
+    load_transcript,
+    parse_pr_reference,
+    build_receipt_prompt,
+    generate_receipt,
+    get_pull_request_context,
+    resolve_repository,
+    get_origin_repository,
+    load_policy_context,
+    get_repository_root,
+    tmp_path,
+):
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+    private_eval_output = tmp_path / "private-eval.json"
+    load_transcript.return_value = SimpleNamespace(
+        path=transcript_path, mode="text", content="content"
+    )
+    get_repository_root.return_value = tmp_path
+    load_policy_context.return_value = policy_context()
+    get_pull_request_context.return_value = pr_context()
+    generate_receipt.return_value = receipt_result()
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            str(transcript_path),
+            "--pr",
+            "3",
+            "--private-eval-output",
+            str(private_eval_output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "BuiltWithAi PR Ownership Receipt" in result.output
+    assert "Private heuristic evaluation" not in result.output
+    assert "ownership_rubric_answers" not in result.output
+    written = json.loads(private_eval_output.read_text(encoding="utf-8"))
+    assert written["ownership_rubric_answers"][0]["evidence_level"] == "visible"
+
+
+@patch("prototype.cli.generate_receipt")
+@patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+@patch("prototype.transcript.load_transcript")
+def test_private_eval_output_existing_file_fails_without_overwrite(
+    load_transcript,
+    parse_pr_reference,
+    generate_receipt,
+    tmp_path,
+):
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+    private_eval_output = tmp_path / "private-eval.json"
+    private_eval_output.write_text("existing\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            str(transcript_path),
+            "--pr",
+            "3",
+            "--private-eval-output",
+            str(private_eval_output),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "already exists" in result.output
+    assert private_eval_output.read_text(encoding="utf-8") == "existing\n"
+    generate_receipt.assert_not_called()
+
+
+@patch("prototype.cli.get_repository_root")
+@patch("prototype.cli.load_policy_context")
+@patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+@patch("prototype.cli.resolve_repository", return_value="owner/repo")
+@patch("prototype.cli.get_pull_request_context")
+@patch("prototype.cli.generate_receipt")
+@patch("prototype.cli.build_receipt_prompt", return_value="secret prompt")
+@patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+@patch("prototype.transcript.load_transcript")
+def test_private_eval_output_overwrite_replaces_existing_file(
+    load_transcript,
+    parse_pr_reference,
+    build_receipt_prompt,
+    generate_receipt,
+    get_pull_request_context,
+    resolve_repository,
+    get_origin_repository,
+    load_policy_context,
+    get_repository_root,
+    tmp_path,
+):
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+    private_eval_output = tmp_path / "private-eval.json"
+    private_eval_output.write_text("existing\n", encoding="utf-8")
+    load_transcript.return_value = SimpleNamespace(
+        path=transcript_path, mode="text", content="content"
+    )
+    get_repository_root.return_value = tmp_path
+    load_policy_context.return_value = policy_context()
+    get_pull_request_context.return_value = pr_context()
+    generate_receipt.return_value = receipt_result()
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            str(transcript_path),
+            "--pr",
+            "3",
+            "--private-eval-output",
+            str(private_eval_output),
+            "--overwrite",
+        ],
+    )
+
+    assert result.exit_code == 0
+    written = json.loads(private_eval_output.read_text(encoding="utf-8"))
+    assert written["ownership_rubric_answers"][0]["question"] == (
+        "Did they steer the work rather than merely accept generated output?"
+    )
 
 
 @patch("prototype.cli.get_repository_root")

@@ -1,5 +1,7 @@
-from prototype.render import render_public_receipt
-from prototype.schemas import PublicReceipt
+import json
+
+from prototype.render import render_private_evaluation, render_public_receipt
+from prototype.schemas import OwnershipRubricAnswer, PrivateEvaluation, PublicReceipt
 
 
 def make_receipt():
@@ -62,3 +64,46 @@ def test_render_public_receipt_includes_each_label_once():
     ]
     for label in labels:
         assert markdown.count(label) == 1
+
+
+class TestRenderPrivateEvaluation:
+    def test_render_private_evaluation_returns_pretty_json(self):
+        private_evaluation = PrivateEvaluation(
+            ownership_rubric_answers=[
+                OwnershipRubricAnswer(
+                    question="Did they evaluate alternative solutions?",
+                    evidence_level="missing",
+                    evidence="The transcript does not show alternatives being discussed.",
+                )
+            ]
+        )
+
+        rendered = render_private_evaluation(private_evaluation)
+
+        assert rendered.endswith("\n")
+        parsed = json.loads(rendered)
+        assert parsed == {
+            "ownership_rubric_answers": [
+                {
+                    "question": "Did they evaluate alternative solutions?",
+                    "evidence_level": "missing",
+                    "evidence": "The transcript does not show alternatives being discussed.",
+                }
+            ]
+        }
+        assert "\n  " in rendered
+
+    def test_render_private_evaluation_preserves_evidence_levels(self):
+        private_evaluation = PrivateEvaluation(
+            ownership_rubric_answers=[
+                OwnershipRubricAnswer(
+                    question="Did they steer the work rather than merely accept generated output?",
+                    evidence_level="contradictory",
+                    evidence="The transcript shows the contributor accepted all output without review.",
+                )
+            ]
+        )
+
+        rendered = render_private_evaluation(private_evaluation)
+
+        assert json.loads(rendered)["ownership_rubric_answers"][0]["evidence_level"] == "contradictory"
