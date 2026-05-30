@@ -1,7 +1,8 @@
-import os
 import re
 import subprocess
 from dataclasses import dataclass
+
+from prototype.config import Config
 
 try:
     from github import Github
@@ -168,11 +169,11 @@ def _github_error_message(
     )
 
 
-def get_pull_request_context(repo: str, pr_number: int) -> PullRequestContext:
+def get_pull_request_context(repo: str, pr_number: int, config: Config) -> PullRequestContext:
     if Github is None:
         raise GitHubContextError("PyGithub is required to fetch GitHub PR context")
 
-    token = os.environ.get("GITHUB_TOKEN")
+    token = config.github_token
     github_client = Github(token) if token else Github()
 
     try:
@@ -216,11 +217,11 @@ def get_pull_request_context(repo: str, pr_number: int) -> PullRequestContext:
     )
 
 
-def get_issue_context(repo: str, issue_number: int) -> IssueContext:
+def get_issue_context(repo: str, issue_number: int, config: Config) -> IssueContext:
     if Github is None:
         raise GitHubContextError("PyGithub is required to fetch GitHub issue context")
 
-    token = os.environ.get("GITHUB_TOKEN")
+    token = config.github_token
     github_client = Github(token) if token else Github()
 
     try:

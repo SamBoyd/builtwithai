@@ -2,6 +2,7 @@ from pathlib import Path
 
 import click
 
+from prototype.config import load_config
 from prototype.github_context import (
     GitHubContextError,
     get_issue_context,
@@ -100,6 +101,8 @@ def cli(
         )
 
     loaded_transcript = transcript.load_transcript(transcript_path)
+    repo_root = get_repository_root()
+    config = load_config(repo_root)
     try:
         repository = resolve_repository(pr_number.repo, repo_name, get_origin_repository)
         if issue_number is not None:
@@ -107,15 +110,15 @@ def cli(
                 raise GitHubContextError(
                     f'issue URL repository "{issue_number.repo}" does not match repository "{repository}"'
                 )
-        pr_context = get_pull_request_context(repository, pr_number.number)
+        pr_context = get_pull_request_context(repository, pr_number.number, config)
         issue_context = None
         if issue_number is not None:
-            issue_context = get_issue_context(repository, issue_number.number)
+            issue_context = get_issue_context(repository, issue_number.number, config)
     except GitHubContextError as error:
         raise click.ClickException(str(error)) from error
 
     try:
-        policy_context = load_policy_context(policy_path, get_repository_root())
+        policy_context = load_policy_context(policy_path, repo_root)
     except PolicyContextError as error:
         raise click.ClickException(str(error)) from error
 
@@ -126,7 +129,7 @@ def cli(
         policy_context=policy_context,
     )
     try:
-        receipt_result = generate_receipt(prompt)
+        receipt_result = generate_receipt(prompt, config)
     except LLMClientError as error:
         raise click.ClickException(str(error)) from error
 

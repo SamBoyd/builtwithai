@@ -1,9 +1,11 @@
 import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+import pytest
 from click.testing import CliRunner
 
+from prototype.config import Config
 from prototype.cli import GitHubContextError, cli
 from prototype.llm_client import LLMClientError
 from prototype.policy import PolicyContext
@@ -14,6 +16,16 @@ from prototype.schemas import (
     ReceiptResult,
     ReceiptStatus,
 )
+
+
+EMPTY_CONFIG = Config(openai_api_key=None, github_token=None)
+
+
+@pytest.fixture(autouse=True)
+def load_config(monkeypatch):
+    loader = Mock(return_value=EMPTY_CONFIG)
+    monkeypatch.setattr("prototype.cli.load_config", loader)
+    return loader
 
 
 def pr_reference(number=3, repo=None):
@@ -131,7 +143,7 @@ class TestReceiptGeneration:
         parse_pr_reference.assert_called_once_with("3")
         load_transcript.assert_called_once_with(transcript_path)
         resolve_repository.assert_called_once_with(None, None, get_origin_repository)
-        get_pull_request_context.assert_called_once_with("owner/repo", 3)
+        get_pull_request_context.assert_called_once_with("owner/repo", 3, EMPTY_CONFIG)
         get_repository_root.assert_called_once_with()
         load_policy_context.assert_called_once_with(None, tmp_path)
         build_receipt_prompt.assert_called_once_with(
@@ -140,7 +152,7 @@ class TestReceiptGeneration:
             issue_context=None,
             policy_context=policy,
         )
-        generate_receipt.assert_called_once_with("secret prompt")
+        generate_receipt.assert_called_once_with("secret prompt", EMPTY_CONFIG)
         assert "BuiltWithAi PR Ownership Receipt" in result.output
         assert "Status: Reviewable" in result.output
         assert "The transcript shows visible human steering." in result.output
@@ -198,7 +210,7 @@ class TestReceiptGeneration:
             issue_context=None,
             policy_context=policy,
         )
-        generate_receipt.assert_called_once_with("receipt prompt")
+        generate_receipt.assert_called_once_with("receipt prompt", EMPTY_CONFIG)
 
     @patch("prototype.cli.get_repository_root")
     @patch("prototype.cli.load_policy_context")
@@ -247,15 +259,15 @@ class TestReceiptGeneration:
         parse_pr_reference.assert_called_once_with("3")
         parse_issue_reference.assert_called_once_with("1")
         resolve_repository.assert_called_once_with(None, None, get_origin_repository)
-        get_pull_request_context.assert_called_once_with("owner/repo", 3)
-        get_issue_context.assert_called_once_with("owner/repo", 1)
+        get_pull_request_context.assert_called_once_with("owner/repo", 3, EMPTY_CONFIG)
+        get_issue_context.assert_called_once_with("owner/repo", 1, EMPTY_CONFIG)
         build_receipt_prompt.assert_called_once_with(
             loaded_transcript,
             pr,
             issue_context=issue,
             policy_context=policy,
         )
-        generate_receipt.assert_called_once_with("receipt prompt")
+        generate_receipt.assert_called_once_with("receipt prompt", EMPTY_CONFIG)
 
     @patch("prototype.cli.resolve_repository", return_value="owner/repo")
     @patch("prototype.cli.get_pull_request_context")
@@ -291,9 +303,9 @@ class TestReceiptGeneration:
         assert result.exit_code == 0
         parse_pr_reference.assert_called_once_with("https://github.com/owner/repo/pull/17")
         resolve_repository.assert_called_once()
-        get_pull_request_context.assert_called_once_with("owner/repo", 17)
+        get_pull_request_context.assert_called_once_with("owner/repo", 17, EMPTY_CONFIG)
         build_receipt_prompt.assert_called_once()
-        generate_receipt.assert_called_once_with("receipt prompt")
+        generate_receipt.assert_called_once_with("receipt prompt", EMPTY_CONFIG)
         assert "BuiltWithAi PR Ownership Receipt" in result.output
         assert "Status: Caution" in result.output
 
@@ -327,9 +339,9 @@ class TestReceiptGeneration:
         assert result.exit_code == 0
         validate_repo.assert_called_once_with("owner/repo")
         resolve_repository.assert_called_once()
-        get_pull_request_context.assert_called_once_with("owner/repo", 3)
+        get_pull_request_context.assert_called_once_with("owner/repo", 3, EMPTY_CONFIG)
         build_receipt_prompt.assert_called_once()
-        generate_receipt.assert_called_once_with("receipt prompt")
+        generate_receipt.assert_called_once_with("receipt prompt", EMPTY_CONFIG)
 
     @patch("prototype.cli.resolve_repository", return_value="owner/repo")
     @patch("prototype.cli.get_pull_request_context")
@@ -361,7 +373,7 @@ class TestReceiptGeneration:
 
         assert result.exit_code == 0
         build_receipt_prompt.assert_called_once()
-        generate_receipt.assert_called_once_with("receipt prompt")
+        generate_receipt.assert_called_once_with("receipt prompt", EMPTY_CONFIG)
         assert "Receipt binding: LLM-bound PR #42." in result.output
 
 
@@ -795,7 +807,7 @@ class TestPolicyOption:
             issue_context=None,
             policy_context=policy,
         )
-        generate_receipt.assert_called_once_with("receipt prompt")
+        generate_receipt.assert_called_once_with("receipt prompt", EMPTY_CONFIG)
 
     @patch("prototype.cli.get_repository_root")
     @patch("prototype.cli.load_policy_context")
@@ -881,7 +893,7 @@ class TestCliErrors:
 
         assert result.exit_code != 0
         build_receipt_prompt.assert_called_once()
-        generate_receipt.assert_called_once_with("receipt prompt")
+        generate_receipt.assert_called_once_with("receipt prompt", EMPTY_CONFIG)
         assert "OPENAI_API_KEY is required to generate a receipt" in result.output
 
     @patch("prototype.cli.validate_repo", return_value="option-owner/option-repo")

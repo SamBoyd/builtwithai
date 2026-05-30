@@ -38,17 +38,20 @@ source .venv/bin/activate
 pip install -r prototype/requirements.txt
 ```
 
-Set an OpenAI API key before generating receipts:
+Create a local `.env` file before generating receipts:
 
 ```bash
-export OPENAI_API_KEY=...
+cp .env.example .env
 ```
 
-Set a GitHub token when working with private repositories or when public API rate limits are not enough:
+Then set `OPENAI_API_KEY` in `.env`. Set `GITHUB_TOKEN` too when working with private repositories or when public API rate limits are not enough:
 
-```bash
-export GITHUB_TOKEN=github_pat_...
+```dotenv
+OPENAI_API_KEY=...
+GITHUB_TOKEN=github_pat_...
 ```
+
+Exported shell environment variables override values in `.env`.
 
 The prototype only needs read access. Prefer a fine-grained GitHub token scoped to the target repository with read-only Metadata, Pull requests, Issues, and Contents access. It does not need permission to comment, push, administer repositories, manage workflows, or read secrets.
 
@@ -98,4 +101,3 @@ The prototype intentionally keeps v1 narrow:
 - It does not fetch or evaluate the full diff.
 - It does not post comments back to GitHub.
 - It does not produce signed receipts or tamper-resistant provenance.
-

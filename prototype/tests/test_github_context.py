@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
+from prototype.config import Config
 from prototype.github_context import (
     GitHubContextError,
     IssueContext,
@@ -109,13 +110,12 @@ class TestGetPullRequestContext:
         pull.head.sha = head_sha
         return pull
 
-    def test_uses_github_token(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_uses_github_token(self, github_class):
         github = github_class.return_value
         repo = github.get_repo.return_value
         self.configure_pull(github_class)
 
-        context = get_pull_request_context("owner/repo", 3)
+        context = get_pull_request_context("owner/repo", 3, Config(openai_api_key=None, github_token="secret-token"))
 
         github_class.assert_called_once_with("secret-token")
         github.get_repo.assert_called_once_with("owner/repo")
@@ -128,8 +128,7 @@ class TestGetPullRequestContext:
             head_sha="abc123",
         )
 
-    def test_allows_missing_github_token(self, github_class, monkeypatch):
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    def test_allows_missing_github_token(self, github_class):
         self.configure_pull(
             github_class,
             number=4,
@@ -139,40 +138,36 @@ class TestGetPullRequestContext:
             head_sha="def456",
         )
 
-        context = get_pull_request_context("owner/repo", 4)
+        context = get_pull_request_context("owner/repo", 4, Config(openai_api_key=None, github_token=None))
 
         github_class.assert_called_once_with()
         assert context.body == ""
 
-    def test_wraps_fetch_errors(self, github_class, monkeypatch):
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    def test_wraps_fetch_errors(self, github_class):
         github_class.return_value.get_repo.side_effect = RuntimeError("rate limited")
 
         with pytest.raises(GitHubContextError, match="set GITHUB_TOKEN"):
-            get_pull_request_context("owner/repo", 3)
+            get_pull_request_context("owner/repo", 3, Config(openai_api_key=None, github_token=None))
 
-    def test_reports_authentication_errors_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "bad-token")
+    def test_reports_authentication_errors_readably(self, github_class):
         github_class.return_value.get_repo.side_effect = self.GitHubError(401, "Bad credentials")
 
         with pytest.raises(
             GitHubContextError,
             match="GitHub authentication failed; check that GITHUB_TOKEN is set to a valid token.",
         ):
-            get_pull_request_context("owner/repo", 3)
+            get_pull_request_context("owner/repo", 3, Config(openai_api_key=None, github_token="bad-token"))
 
-    def test_reports_inaccessible_repository_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_reports_inaccessible_repository_readably(self, github_class):
         github_class.return_value.get_repo.side_effect = self.GitHubError(404, "Not Found")
 
         with pytest.raises(
             GitHubContextError,
             match="could not access owner/repo; check the repository name and GITHUB_TOKEN access.",
         ):
-            get_pull_request_context("owner/repo", 3)
+            get_pull_request_context("owner/repo", 3, Config(openai_api_key=None, github_token="secret-token"))
 
-    def test_reports_missing_pr_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_reports_missing_pr_readably(self, github_class):
         repo = github_class.return_value.get_repo.return_value
         repo.get_pull.side_effect = self.GitHubError(404, "Not Found")
 
@@ -180,20 +175,18 @@ class TestGetPullRequestContext:
             GitHubContextError,
             match="could not find PR #99 in owner/repo",
         ):
-            get_pull_request_context("owner/repo", 99)
+            get_pull_request_context("owner/repo", 99, Config(openai_api_key=None, github_token="secret-token"))
 
-    def test_reports_rate_limit_errors_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_reports_rate_limit_errors_readably(self, github_class):
         github_class.return_value.get_repo.side_effect = self.GitHubError(403, "API rate limit exceeded")
 
         with pytest.raises(
             GitHubContextError,
             match="GitHub API rate limit exceeded; set GITHUB_TOKEN or wait for the rate limit to reset.",
         ):
-            get_pull_request_context("owner/repo", 3)
+            get_pull_request_context("owner/repo", 3, Config(openai_api_key=None, github_token="secret-token"))
 
-    def test_reports_permission_errors_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_reports_permission_errors_readably(self, github_class):
         repo = github_class.return_value.get_repo.return_value
         repo.get_pull.side_effect = self.GitHubError(403, "Resource not accessible by personal access token")
 
@@ -204,7 +197,7 @@ class TestGetPullRequestContext:
                 "use a token with read-only Pull requests and Metadata access."
             ),
         ):
-            get_pull_request_context("owner/repo", 3)
+            get_pull_request_context("owner/repo", 3, Config(openai_api_key=None, github_token="secret-token"))
 
 
 @patch("prototype.github_context.Github")
@@ -228,13 +221,12 @@ class TestGetIssueContext:
         issue.body = body
         return issue
 
-    def test_uses_github_token(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_uses_github_token(self, github_class):
         github = github_class.return_value
         repo = github.get_repo.return_value
         self.configure_issue(github_class)
 
-        context = get_issue_context("owner/repo", 1)
+        context = get_issue_context("owner/repo", 1, Config(openai_api_key=None, github_token="secret-token"))
 
         github_class.assert_called_once_with("secret-token")
         github.get_repo.assert_called_once_with("owner/repo")
@@ -245,8 +237,7 @@ class TestGetIssueContext:
             body="Issue body",
         )
 
-    def test_allows_missing_github_token(self, github_class, monkeypatch):
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    def test_allows_missing_github_token(self, github_class):
         self.configure_issue(
             github_class,
             number=2,
@@ -254,40 +245,36 @@ class TestGetIssueContext:
             body=None,
         )
 
-        context = get_issue_context("owner/repo", 2)
+        context = get_issue_context("owner/repo", 2, Config(openai_api_key=None, github_token=None))
 
         github_class.assert_called_once_with()
         assert context.body == ""
 
-    def test_wraps_fetch_errors(self, github_class, monkeypatch):
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    def test_wraps_fetch_errors(self, github_class):
         github_class.return_value.get_repo.side_effect = RuntimeError("rate limited")
 
         with pytest.raises(GitHubContextError, match="set GITHUB_TOKEN"):
-            get_issue_context("owner/repo", 1)
+            get_issue_context("owner/repo", 1, Config(openai_api_key=None, github_token=None))
 
-    def test_reports_authentication_errors_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "bad-token")
+    def test_reports_authentication_errors_readably(self, github_class):
         github_class.return_value.get_repo.side_effect = self.GitHubError(401, "Bad credentials")
 
         with pytest.raises(
             GitHubContextError,
             match="GitHub authentication failed; check that GITHUB_TOKEN is set to a valid token.",
         ):
-            get_issue_context("owner/repo", 1)
+            get_issue_context("owner/repo", 1, Config(openai_api_key=None, github_token="bad-token"))
 
-    def test_reports_inaccessible_repository_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_reports_inaccessible_repository_readably(self, github_class):
         github_class.return_value.get_repo.side_effect = self.GitHubError(404, "Not Found")
 
         with pytest.raises(
             GitHubContextError,
             match="could not access owner/repo; check the repository name and GITHUB_TOKEN access.",
         ):
-            get_issue_context("owner/repo", 1)
+            get_issue_context("owner/repo", 1, Config(openai_api_key=None, github_token="secret-token"))
 
-    def test_reports_missing_issue_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_reports_missing_issue_readably(self, github_class):
         repo = github_class.return_value.get_repo.return_value
         repo.get_issue.side_effect = self.GitHubError(404, "Not Found")
 
@@ -295,20 +282,18 @@ class TestGetIssueContext:
             GitHubContextError,
             match="could not find issue #99 in owner/repo",
         ):
-            get_issue_context("owner/repo", 99)
+            get_issue_context("owner/repo", 99, Config(openai_api_key=None, github_token="secret-token"))
 
-    def test_reports_rate_limit_errors_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_reports_rate_limit_errors_readably(self, github_class):
         github_class.return_value.get_repo.side_effect = self.GitHubError(403, "API rate limit exceeded")
 
         with pytest.raises(
             GitHubContextError,
             match="GitHub API rate limit exceeded; set GITHUB_TOKEN or wait for the rate limit to reset.",
         ):
-            get_issue_context("owner/repo", 1)
+            get_issue_context("owner/repo", 1, Config(openai_api_key=None, github_token="secret-token"))
 
-    def test_reports_permission_errors_readably(self, github_class, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    def test_reports_permission_errors_readably(self, github_class):
         repo = github_class.return_value.get_repo.return_value
         repo.get_issue.side_effect = self.GitHubError(403, "Resource not accessible by personal access token")
 
@@ -319,4 +304,4 @@ class TestGetIssueContext:
                 "use a token with read-only Issues and Metadata access."
             ),
         ):
-            get_issue_context("owner/repo", 1)
+            get_issue_context("owner/repo", 1, Config(openai_api_key=None, github_token="secret-token"))

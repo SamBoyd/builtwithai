@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
+from prototype.config import Config
 from prototype.schemas import OwnershipRubricAnswer, PrivateEvaluation, PublicReceipt, ReceiptResult
 
 
@@ -33,25 +34,22 @@ def make_receipt_result():
 
 @patch("prototype.llm_client.instructor.from_provider")
 class TestGenerateReceipt:
-    def test_missing_api_key_fails_before_creating_client(self, from_provider, monkeypatch):
+    def test_missing_api_key_fails_before_creating_client(self, from_provider):
         from prototype.llm_client import LLMClientError, generate_receipt
 
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
         with pytest.raises(LLMClientError, match="OPENAI_API_KEY is required to generate a receipt"):
-            generate_receipt("prompt")
+            generate_receipt("prompt", Config(openai_api_key=None, github_token=None))
 
         from_provider.assert_not_called()
 
-    def test_requests_structured_receipt_with_default_settings(self, from_provider, monkeypatch):
+    def test_requests_structured_receipt_with_default_settings(self, from_provider):
         from prototype.llm_client import DEFAULT_TEMPERATURE, generate_receipt
         from prototype.schemas import ReceiptResult
 
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         expected_result = make_receipt_result()
         from_provider.return_value.create.return_value = expected_result
 
-        result = generate_receipt("receipt prompt")
+        result = generate_receipt("receipt prompt", Config(openai_api_key="test-key", github_token=None))
 
         assert result == expected_result
         from_provider.assert_called_once_with("openai/gpt-5.5", api_key="test-key")
@@ -61,21 +59,19 @@ class TestGenerateReceipt:
             temperature=DEFAULT_TEMPERATURE,
         )
 
-    def test_uses_model_override(self, from_provider, monkeypatch):
+    def test_uses_model_override(self, from_provider):
         from prototype.llm_client import generate_receipt
 
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         from_provider.return_value.create.return_value = make_receipt_result()
 
-        generate_receipt("receipt prompt", model="gpt-5.4-mini")
+        generate_receipt("receipt prompt", Config(openai_api_key="test-key", github_token=None), model="gpt-5.4-mini")
 
         from_provider.assert_called_once_with("openai/gpt-5.4-mini", api_key="test-key")
 
-    def test_wraps_provider_failures(self, from_provider, monkeypatch):
+    def test_wraps_provider_failures(self, from_provider):
         from prototype.llm_client import LLMClientError, generate_receipt
 
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         from_provider.return_value.create.side_effect = RuntimeError("boom")
 
         with pytest.raises(LLMClientError, match="could not generate receipt with OpenAI: boom"):
-            generate_receipt("receipt prompt")
+            generate_receipt("receipt prompt", Config(openai_api_key="test-key", github_token=None))
