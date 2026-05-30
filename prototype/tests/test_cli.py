@@ -5,6 +5,7 @@ from click.testing import CliRunner
 
 from prototype.cli import GitHubContextError, cli
 from prototype.llm_client import LLMClientError
+from prototype.policy import PolicyContext
 from prototype.schemas import PublicReceipt, ReceiptResult, ReceiptStatus
 
 
@@ -30,6 +31,10 @@ def pr_context(
 
 def issue_context(number=1, title="Support issue context", body="Issue body"):
     return SimpleNamespace(number=number, title=title, body=body)
+
+
+def policy_context(status="none_found", path=None, content=""):
+    return PolicyContext(status=status, path=path, content=content)
 
 
 def receipt_result(
@@ -59,8 +64,11 @@ def test_help_shows_required_cli_surface():
     assert "--pr" in result.output
     assert "--issue" in result.output
     assert "--repo" in result.output
+    assert "--policy" in result.output
 
 
+@patch("prototype.cli.get_repository_root")
+@patch("prototype.cli.load_policy_context")
 @patch("prototype.cli.get_origin_repository", return_value="owner/repo")
 @patch("prototype.cli.resolve_repository", return_value="owner/repo")
 @patch("prototype.cli.get_pull_request_context")
@@ -76,13 +84,18 @@ def test_numeric_pr_succeeds_with_transcript_file(
     get_pull_request_context,
     resolve_repository,
     get_origin_repository,
+    load_policy_context,
+    get_repository_root,
     tmp_path,
 ):
     loaded_transcript = SimpleNamespace(
         path=tmp_path / "transcript.txt", mode="text", content="user secret"
     )
     pr = pr_context(body="Do not print me")
+    policy = policy_context()
     load_transcript.return_value = loaded_transcript
+    get_repository_root.return_value = tmp_path
+    load_policy_context.return_value = policy
     get_pull_request_context.return_value = pr
     generate_receipt.return_value = receipt_result()
     transcript_path = tmp_path / "transcript.txt"
@@ -95,7 +108,14 @@ def test_numeric_pr_succeeds_with_transcript_file(
     load_transcript.assert_called_once_with(transcript_path)
     resolve_repository.assert_called_once_with(None, None, get_origin_repository)
     get_pull_request_context.assert_called_once_with("owner/repo", 3)
-    build_receipt_prompt.assert_called_once_with(loaded_transcript, pr)
+    get_repository_root.assert_called_once_with()
+    load_policy_context.assert_called_once_with(None, tmp_path)
+    build_receipt_prompt.assert_called_once_with(
+        loaded_transcript,
+        pr,
+        issue_context=None,
+        policy_context=policy,
+    )
     generate_receipt.assert_called_once_with("secret prompt")
     assert "BuiltWithAi PR Ownership Receipt" in result.output
     assert "Status: Reviewable" in result.output
@@ -108,6 +128,8 @@ def test_numeric_pr_succeeds_with_transcript_file(
     assert "Transcript:" not in result.output
 
 
+@patch("prototype.cli.get_repository_root")
+@patch("prototype.cli.load_policy_context")
 @patch("prototype.transcript.load_transcript")
 @patch("prototype.cli.get_origin_repository", return_value="owner/repo")
 @patch("prototype.cli.resolve_repository", return_value="owner/repo")
@@ -123,6 +145,8 @@ def test_cli_loads_transcript_path(
     resolve_repository,
     get_origin_repository,
     load_transcript,
+    load_policy_context,
+    get_repository_root,
     tmp_path,
 ):
     transcript_path = tmp_path / "transcript.txt"
@@ -131,7 +155,10 @@ def test_cli_loads_transcript_path(
         path=transcript_path, mode="text", content="content"
     )
     pr = pr_context()
+    policy = policy_context()
     load_transcript.return_value = loaded_transcript
+    get_repository_root.return_value = tmp_path
+    load_policy_context.return_value = policy
     get_pull_request_context.return_value = pr
     generate_receipt.return_value = receipt_result()
 
@@ -139,10 +166,17 @@ def test_cli_loads_transcript_path(
 
     assert result.exit_code == 0
     load_transcript.assert_called_once_with(transcript_path)
-    build_receipt_prompt.assert_called_once_with(loaded_transcript, pr)
+    build_receipt_prompt.assert_called_once_with(
+        loaded_transcript,
+        pr,
+        issue_context=None,
+        policy_context=policy,
+    )
     generate_receipt.assert_called_once_with("receipt prompt")
 
 
+@patch("prototype.cli.get_repository_root")
+@patch("prototype.cli.load_policy_context")
 @patch("prototype.cli.get_origin_repository", return_value="owner/repo")
 @patch("prototype.cli.resolve_repository", return_value="owner/repo")
 @patch("prototype.cli.get_issue_context")
@@ -162,6 +196,8 @@ def test_cli_fetches_explicit_issue_context(
     get_issue_context,
     resolve_repository,
     get_origin_repository,
+    load_policy_context,
+    get_repository_root,
     tmp_path,
 ):
     loaded_transcript = SimpleNamespace(
@@ -169,7 +205,10 @@ def test_cli_fetches_explicit_issue_context(
     )
     pr = pr_context()
     issue = issue_context(number=1, title="Original request")
+    policy = policy_context()
     load_transcript.return_value = loaded_transcript
+    get_repository_root.return_value = tmp_path
+    load_policy_context.return_value = policy
     get_pull_request_context.return_value = pr
     get_issue_context.return_value = issue
     generate_receipt.return_value = receipt_result()
@@ -184,8 +223,119 @@ def test_cli_fetches_explicit_issue_context(
     resolve_repository.assert_called_once_with(None, None, get_origin_repository)
     get_pull_request_context.assert_called_once_with("owner/repo", 3)
     get_issue_context.assert_called_once_with("owner/repo", 1)
-    build_receipt_prompt.assert_called_once_with(loaded_transcript, pr, issue)
+    build_receipt_prompt.assert_called_once_with(
+        loaded_transcript,
+        pr,
+        issue_context=issue,
+        policy_context=policy,
+    )
     generate_receipt.assert_called_once_with("receipt prompt")
+
+
+@patch("prototype.cli.get_repository_root")
+@patch("prototype.cli.load_policy_context")
+@patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+@patch("prototype.cli.resolve_repository", return_value="owner/repo")
+@patch("prototype.cli.get_pull_request_context")
+@patch("prototype.cli.generate_receipt")
+@patch("prototype.cli.build_receipt_prompt", return_value="receipt prompt")
+@patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+@patch("prototype.transcript.load_transcript")
+def test_cli_loads_explicit_policy_path(
+    load_transcript,
+    parse_pr_reference,
+    build_receipt_prompt,
+    generate_receipt,
+    get_pull_request_context,
+    resolve_repository,
+    get_origin_repository,
+    load_policy_context,
+    get_repository_root,
+    tmp_path,
+):
+    loaded_transcript = SimpleNamespace(
+        path=tmp_path / "transcript.txt", mode="text", content="content"
+    )
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+    policy_path = tmp_path / "AI_POLICY.md"
+    policy_path.write_text("Policy text.\n", encoding="utf-8")
+    policy = policy_context(status="provided", path=policy_path, content="Policy text.\n")
+    load_transcript.return_value = loaded_transcript
+    get_repository_root.return_value = tmp_path
+    load_policy_context.return_value = policy
+    get_pull_request_context.return_value = pr_context()
+    generate_receipt.return_value = receipt_result()
+
+    result = CliRunner().invoke(
+        cli,
+        [str(transcript_path), "--pr", "3", "--policy", str(policy_path)],
+    )
+
+    assert result.exit_code == 0
+    get_repository_root.assert_called_once_with()
+    load_policy_context.assert_called_once_with(policy_path, tmp_path)
+    build_receipt_prompt.assert_called_once_with(
+        loaded_transcript,
+        get_pull_request_context.return_value,
+        issue_context=None,
+        policy_context=policy,
+    )
+    generate_receipt.assert_called_once_with("receipt prompt")
+
+
+@patch("prototype.cli.get_repository_root")
+@patch("prototype.cli.load_policy_context")
+@patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+@patch("prototype.cli.resolve_repository", return_value="owner/repo")
+@patch("prototype.cli.get_pull_request_context")
+@patch("prototype.cli.generate_receipt")
+@patch("prototype.cli.build_receipt_prompt", return_value="receipt prompt")
+@patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+@patch("prototype.transcript.load_transcript")
+def test_cli_discovers_policy_when_no_policy_path_is_provided(
+    load_transcript,
+    parse_pr_reference,
+    build_receipt_prompt,
+    generate_receipt,
+    get_pull_request_context,
+    resolve_repository,
+    get_origin_repository,
+    load_policy_context,
+    get_repository_root,
+    tmp_path,
+):
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+    policy = policy_context(status="discovered", path=tmp_path / "AI_POLICY.md", content="Policy text.")
+    load_transcript.return_value = SimpleNamespace(
+        path=transcript_path, mode="text", content="content"
+    )
+    get_repository_root.return_value = tmp_path
+    load_policy_context.return_value = policy
+    get_pull_request_context.return_value = pr_context()
+    generate_receipt.return_value = receipt_result()
+
+    result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "3"])
+
+    assert result.exit_code == 0
+    get_repository_root.assert_called_once_with()
+    load_policy_context.assert_called_once_with(None, tmp_path)
+    build_receipt_prompt.assert_called_once()
+
+
+def test_missing_policy_path_fails_before_command_execution(tmp_path):
+    transcript_path = tmp_path / "transcript.txt"
+    transcript_path.write_text("content\n", encoding="utf-8")
+    missing_policy = tmp_path / "missing-policy.md"
+
+    result = CliRunner().invoke(
+        cli,
+        [str(transcript_path), "--pr", "3", "--policy", str(missing_policy)],
+    )
+
+    assert result.exit_code != 0
+    assert "does not exist" in result.output
 
 
 @patch("prototype.cli.resolve_repository", return_value="owner/repo")

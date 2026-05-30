@@ -1,4 +1,5 @@
 from prototype.github_context import IssueContext, PullRequestContext
+from prototype.policy import PolicyContext
 from prototype.transcript import Transcript
 
 
@@ -12,7 +13,7 @@ If the transcript does not show a kind of contributor ownership, do not credit t
 
 Use the provided transcript, PR context, issue context, and policy context only. Distinguish transcript evidence from PR/issue context. Passing tests are validation evidence, not ownership evidence, unless the transcript shows the contributor choosing, requesting, interpreting, or responding to them.
 
-Keep the public receipt compact and maintainer-facing. Do not reveal private transcript details unnecessarily in the public receipt. Never claim policy compliance when no policy text was provided.
+Keep the public receipt compact and maintainer-facing. Do not reveal private transcript details unnecessarily in the public receipt. Never claim policy compliance when no policy text was provided. If policy status is none_found, policy_fit must say that no clear repository AI policy was available in the evaluated inputs.
 
 Return structured output matching the provided Pydantic schema:
 - public_receipt
@@ -55,7 +56,7 @@ Transcript:
 
 {issue_context}
 
-Policy context: no policy found
+{policy_context}
 """
 
 
@@ -80,10 +81,24 @@ def format_issue_context(issue_context: IssueContext | None) -> str:
         f"Issue body: {issue_context.body}"
     )
 
+
+def format_policy_context(policy_context: PolicyContext | None) -> str:
+    if policy_context is None or policy_context.status == "none_found":
+        return "Policy context: no policy found"
+    return (
+        "Policy context:\n"
+        f"Policy status: {policy_context.status}\n"
+        f"Policy path: {policy_context.path}\n"
+        f"Policy text:\n{policy_context.content}"
+    )
+
+
 def build_receipt_prompt(
     loaded_transcript: Transcript,
     pr_context: PullRequestContext,
     issue_context: IssueContext | None = None,
+    *,
+    policy_context: PolicyContext | None = None,
 ) -> str:
     return PROMPT_TEMPLATE.format(
         transcript_path=loaded_transcript.path,
@@ -91,5 +106,6 @@ def build_receipt_prompt(
         transcript_content=loaded_transcript.content,
 
         pr_context=format_pr_context(pr_context),
-        issue_context=format_issue_context(issue_context)
+        issue_context=format_issue_context(issue_context),
+        policy_context=format_policy_context(policy_context),
     )

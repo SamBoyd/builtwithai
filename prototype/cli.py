@@ -13,6 +13,7 @@ from prototype.github_context import (
     validate_repo,
 )
 from prototype.llm_client import LLMClientError, generate_receipt
+from prototype.policy import PolicyContextError, get_repository_root, load_policy_context
 from prototype.prompt import build_receipt_prompt
 from prototype.render import render_public_receipt
 from prototype import transcript
@@ -51,8 +52,14 @@ def parse_repo(ctx, param, value):
 )
 @click.option("--pr", "pr_number", required=True, callback=parse_pr, help="PR number or GitHub PR URL.")
 @click.option("--issue", "issue_number", callback=parse_issue, help="Issue number or GitHub issue URL.")
+@click.option(
+    "--policy",
+    "policy_path",
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+    help="Repository AI or contribution policy file.",
+)
 @click.option("--repo", "repo_name", callback=parse_repo, help='GitHub repository in "owner/name" format.')
-def cli(transcript_path, pr_number, issue_number, repo_name):
+def cli(transcript_path, pr_number, issue_number, policy_path, repo_name):
     loaded_transcript = transcript.load_transcript(transcript_path)
     try:
         repository = resolve_repository(pr_number.repo, repo_name, get_origin_repository)
@@ -68,10 +75,17 @@ def cli(transcript_path, pr_number, issue_number, repo_name):
     except GitHubContextError as error:
         raise click.ClickException(str(error)) from error
 
-    if issue_context is None:
-        prompt = build_receipt_prompt(loaded_transcript, pr_context)
-    else:
-        prompt = build_receipt_prompt(loaded_transcript, pr_context, issue_context)
+    try:
+        policy_context = load_policy_context(policy_path, get_repository_root())
+    except PolicyContextError as error:
+        raise click.ClickException(str(error)) from error
+
+    prompt = build_receipt_prompt(
+        loaded_transcript,
+        pr_context,
+        issue_context=issue_context,
+        policy_context=policy_context,
+    )
     try:
         receipt_result = generate_receipt(prompt)
     except LLMClientError as error:

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from prototype.github_context import IssueContext, PullRequestContext
+from prototype.policy import PolicyContext
 from prototype.prompt import build_receipt_prompt
 from prototype.transcript import Transcript
 
@@ -164,3 +165,58 @@ class TestBuildReceiptPrompt:
 
         assert "- public_receipt" in prompt
         assert "private_evaluation" not in prompt
+
+    def test_includes_policy_context_when_provided(self):
+        loaded_transcript = Transcript(
+            path=Path("transcripts/session.txt"),
+            mode="text",
+            content="user: I checked the repo policy",
+        )
+        pr_context = PullRequestContext(
+            number=3,
+            title="Add policy context",
+            body="",
+            url="https://github.com/owner/repo/pull/3",
+            head_sha="abc123",
+        )
+        policy_context = PolicyContext(
+            status="provided",
+            path=Path("AI_POLICY.md"),
+            content="AI-assisted contributions must disclose AI use.",
+        )
+
+        prompt = build_receipt_prompt(
+            loaded_transcript,
+            pr_context,
+            policy_context=policy_context,
+        )
+
+        assert "Policy context:\n" in prompt
+        assert "Policy status: provided" in prompt
+        assert "Policy path: AI_POLICY.md" in prompt
+        assert "AI-assisted contributions must disclose AI use." in prompt
+        assert "Policy context: no policy found" not in prompt
+
+    def test_missing_policy_context_keeps_missing_marker_and_instruction(self):
+        loaded_transcript = Transcript(
+            path=Path("transcripts/session.txt"),
+            mode="text",
+            content="user: ship it",
+        )
+        pr_context = PullRequestContext(
+            number=3,
+            title="Add policy context",
+            body="",
+            url="https://github.com/owner/repo/pull/3",
+            head_sha="abc123",
+        )
+        policy_context = PolicyContext(status="none_found", path=None, content="")
+
+        prompt = build_receipt_prompt(
+            loaded_transcript,
+            pr_context,
+            policy_context=policy_context,
+        )
+
+        assert "Policy context: no policy found" in prompt
+        assert "policy_fit must say that no clear repository AI policy was available" in prompt
