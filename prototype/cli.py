@@ -65,6 +65,11 @@ def parse_repo(ctx, param, value):
     help="Print the private heuristic evaluation after the public receipt.",
 )
 @click.option(
+    "--receipt-output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the public receipt markdown to this file instead of stdout.",
+)
+@click.option(
     "--private-eval-output",
     type=click.Path(dir_okay=False, path_type=Path),
     help="Write the private heuristic evaluation JSON to this file.",
@@ -72,7 +77,7 @@ def parse_repo(ctx, param, value):
 @click.option(
     "--overwrite",
     is_flag=True,
-    help="Allow overwriting an existing private evaluation output file.",
+    help="Allow overwriting existing output files.",
 )
 def cli(
     transcript_path,
@@ -81,9 +86,14 @@ def cli(
     policy_path,
     repo_name,
     show_private_eval,
+    receipt_output,
     private_eval_output,
     overwrite,
 ):
+    if receipt_output is not None and receipt_output.exists() and not overwrite:
+        raise click.ClickException(
+            f'receipt output file "{receipt_output}" already exists; pass --overwrite to replace it'
+        )
     if private_eval_output is not None and private_eval_output.exists() and not overwrite:
         raise click.ClickException(
             f'private evaluation output file "{private_eval_output}" already exists; pass --overwrite to replace it'
@@ -124,7 +134,11 @@ def cli(
     if private_eval_output is not None:
         private_eval_output.write_text(private_evaluation_json, encoding="utf-8")
 
-    click.echo(render_public_receipt(receipt_result.public_receipt), nl=False)
+    public_receipt_markdown = render_public_receipt(receipt_result.public_receipt)
+    if receipt_output is not None:
+        receipt_output.write_text(public_receipt_markdown, encoding="utf-8")
+    else:
+        click.echo(public_receipt_markdown, nl=False)
     if show_private_eval:
         click.echo("\nPrivate heuristic evaluation\n")
         click.echo(private_evaluation_json, nl=False)

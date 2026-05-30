@@ -83,8 +83,10 @@ class TestCliHelp:
         assert "--repo" in result.output
         assert "--policy" in result.output
         assert "--show-private-eval" in result.output
+        assert "--receipt-output" in result.output
         assert "--private-eval-output" in result.output
         assert "--overwrite" in result.output
+        assert "Allow overwriting existing output files." in result.output
 
 
 class TestReceiptGeneration:
@@ -541,6 +543,204 @@ class TestPrivateEvaluationOutput:
         written = json.loads(private_eval_output.read_text(encoding="utf-8"))
         assert written["ownership_rubric_answers"][0]["question"] == (
             "Did they steer the work rather than merely accept generated output?"
+        )
+
+
+class TestReceiptOutput:
+    @patch("prototype.cli.get_repository_root")
+    @patch("prototype.cli.load_policy_context")
+    @patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+    @patch("prototype.cli.resolve_repository", return_value="owner/repo")
+    @patch("prototype.cli.get_pull_request_context")
+    @patch("prototype.cli.generate_receipt")
+    @patch("prototype.cli.build_receipt_prompt", return_value="secret prompt")
+    @patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+    @patch("prototype.transcript.load_transcript")
+    def test_receipt_output_writes_public_receipt_without_printing_it(
+        self,
+        load_transcript,
+        parse_pr_reference,
+        build_receipt_prompt,
+        generate_receipt,
+        get_pull_request_context,
+        resolve_repository,
+        get_origin_repository,
+        load_policy_context,
+        get_repository_root,
+        tmp_path,
+    ):
+        transcript_path = tmp_path / "transcript.txt"
+        transcript_path.write_text("content\n", encoding="utf-8")
+        receipt_output = tmp_path / "receipt.md"
+        load_transcript.return_value = SimpleNamespace(
+            path=transcript_path, mode="text", content="content"
+        )
+        get_repository_root.return_value = tmp_path
+        load_policy_context.return_value = policy_context()
+        get_pull_request_context.return_value = pr_context()
+        generate_receipt.return_value = receipt_result()
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                str(transcript_path),
+                "--pr",
+                "3",
+                "--receipt-output",
+                str(receipt_output),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert result.output == ""
+        written = receipt_output.read_text(encoding="utf-8")
+        assert "BuiltWithAi PR Ownership Receipt" in written
+        assert "Status: Reviewable" in written
+        assert "The transcript shows visible human steering." in written
+        assert "LLM receipt binding." in written
+        assert "ownership_rubric_answers" not in written
+
+    @patch("prototype.cli.generate_receipt")
+    @patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+    @patch("prototype.transcript.load_transcript")
+    def test_receipt_output_existing_file_fails_without_overwrite(
+        self,
+        load_transcript,
+        parse_pr_reference,
+        generate_receipt,
+        tmp_path,
+    ):
+        transcript_path = tmp_path / "transcript.txt"
+        transcript_path.write_text("content\n", encoding="utf-8")
+        receipt_output = tmp_path / "receipt.md"
+        receipt_output.write_text("existing\n", encoding="utf-8")
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                str(transcript_path),
+                "--pr",
+                "3",
+                "--receipt-output",
+                str(receipt_output),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "already exists" in result.output
+        assert receipt_output.read_text(encoding="utf-8") == "existing\n"
+        generate_receipt.assert_not_called()
+
+    @patch("prototype.cli.get_repository_root")
+    @patch("prototype.cli.load_policy_context")
+    @patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+    @patch("prototype.cli.resolve_repository", return_value="owner/repo")
+    @patch("prototype.cli.get_pull_request_context")
+    @patch("prototype.cli.generate_receipt")
+    @patch("prototype.cli.build_receipt_prompt", return_value="secret prompt")
+    @patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+    @patch("prototype.transcript.load_transcript")
+    def test_receipt_output_overwrite_replaces_existing_file(
+        self,
+        load_transcript,
+        parse_pr_reference,
+        build_receipt_prompt,
+        generate_receipt,
+        get_pull_request_context,
+        resolve_repository,
+        get_origin_repository,
+        load_policy_context,
+        get_repository_root,
+        tmp_path,
+    ):
+        transcript_path = tmp_path / "transcript.txt"
+        transcript_path.write_text("content\n", encoding="utf-8")
+        receipt_output = tmp_path / "receipt.md"
+        receipt_output.write_text("existing\n", encoding="utf-8")
+        load_transcript.return_value = SimpleNamespace(
+            path=transcript_path, mode="text", content="content"
+        )
+        get_repository_root.return_value = tmp_path
+        load_policy_context.return_value = policy_context()
+        get_pull_request_context.return_value = pr_context()
+        generate_receipt.return_value = receipt_result(
+            receipt_binding="Replacement binding."
+        )
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                str(transcript_path),
+                "--pr",
+                "3",
+                "--receipt-output",
+                str(receipt_output),
+                "--overwrite",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert result.output == ""
+        written = receipt_output.read_text(encoding="utf-8")
+        assert "existing" not in written
+        assert "Receipt binding: Replacement binding." in written
+
+    @patch("prototype.cli.get_repository_root")
+    @patch("prototype.cli.load_policy_context")
+    @patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+    @patch("prototype.cli.resolve_repository", return_value="owner/repo")
+    @patch("prototype.cli.get_pull_request_context")
+    @patch("prototype.cli.generate_receipt")
+    @patch("prototype.cli.build_receipt_prompt", return_value="secret prompt")
+    @patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+    @patch("prototype.transcript.load_transcript")
+    def test_receipt_and_private_eval_outputs_write_both_files_without_stdout(
+        self,
+        load_transcript,
+        parse_pr_reference,
+        build_receipt_prompt,
+        generate_receipt,
+        get_pull_request_context,
+        resolve_repository,
+        get_origin_repository,
+        load_policy_context,
+        get_repository_root,
+        tmp_path,
+    ):
+        transcript_path = tmp_path / "transcript.txt"
+        transcript_path.write_text("content\n", encoding="utf-8")
+        receipt_output = tmp_path / "receipt.md"
+        private_eval_output = tmp_path / "private-eval.json"
+        load_transcript.return_value = SimpleNamespace(
+            path=transcript_path, mode="text", content="content"
+        )
+        get_repository_root.return_value = tmp_path
+        load_policy_context.return_value = policy_context()
+        get_pull_request_context.return_value = pr_context()
+        generate_receipt.return_value = receipt_result()
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                str(transcript_path),
+                "--pr",
+                "3",
+                "--receipt-output",
+                str(receipt_output),
+                "--private-eval-output",
+                str(private_eval_output),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert result.output == ""
+        assert "BuiltWithAi PR Ownership Receipt" in receipt_output.read_text(
+            encoding="utf-8"
+        )
+        written_private_eval = json.loads(private_eval_output.read_text(encoding="utf-8"))
+        assert (
+            written_private_eval["ownership_rubric_answers"][0]["evidence_level"]
+            == "visible"
         )
 
 
