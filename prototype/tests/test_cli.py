@@ -18,7 +18,7 @@ from prototype.schemas import (
 )
 
 
-EMPTY_CONFIG = Config(openai_api_key=None, github_token=None)
+EMPTY_CONFIG = Config(github_token=None)
 
 
 @pytest.fixture(autouse=True)

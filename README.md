@@ -26,7 +26,7 @@ The goal is not to prove correctness, detect AI, or bypass a project's local pol
 
 ## Prototype CLI
 
-The prototype reads a transcript and GitHub PR metadata, then asks an OpenAI model for a public BuiltWithAI PR Ownership Receipt.
+The prototype reads a transcript and GitHub PR metadata, then asks an Instructor-supported LLM for a public BuiltWithAI PR Ownership Receipt.
 
 Run CLI modules from the repository root with `python3 -m prototype.cli`, not by executing `prototype/cli.py` directly.
 
@@ -44,14 +44,20 @@ Create a local `.env` file before generating receipts:
 cp .env.example .env
 ```
 
-Then set `OPENAI_API_KEY` in `.env`. Set `GITHUB_TOKEN` too when working with private repositories or when public API rate limits are not enough:
+Then choose exactly one `LLM_MODEL` line in `.env` and set the matching provider API key. The model value must use Instructor's `provider/model-name` format:
 
 ```dotenv
-OPENAI_API_KEY=...
+LLM_MODEL=anthropic/claude-sonnet-4-0-20250514
+ANTHROPIC_API_KEY=...
+```
+
+The `.env.example` file includes commented alternatives for OpenAI, Google, and Groq. Set `GITHUB_TOKEN` too when working with private repositories or when public API rate limits are not enough:
+
+```dotenv
 GITHUB_TOKEN=github_pat_...
 ```
 
-Exported shell environment variables override values in `.env`.
+If `LLM_MODEL` is not set, the prototype defaults to `openai/gpt-5.5` and requires `OPENAI_API_KEY`. Exported shell environment variables override values in `.env`.
 
 The prototype only needs read access. Prefer a fine-grained GitHub token scoped to the target repository with read-only Metadata, Pull requests, Issues, and Contents access. It does not need permission to comment, push, administer repositories, manage workflows, or read secrets.
 
