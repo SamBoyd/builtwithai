@@ -28,14 +28,21 @@ The goal is not to prove correctness, detect AI, or bypass a project's local pol
 
 The prototype reads a transcript and GitHub PR metadata, then asks an Instructor-supported LLM for a public BuiltWithAI PR Ownership Receipt.
 
-Run CLI modules from the repository root with `python3 -m prototype.cli`, not by executing `prototype/cli.py` directly.
-
 ### Setup
+
+Install the CLI:
+
+```bash
+pipx install git+https://github.com/samboyd/builtwithai.git
+```
+
+For development from a cloned repository, install the package and test dependencies into your active Python environment:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r prototype/requirements.txt
+python3 -m pip install -e ".[dev]"
+builtwithai --help
 ```
 
 Create a local `.env` file before generating receipts:
@@ -64,22 +71,22 @@ The prototype only needs read access. Prefer a fine-grained GitHub token scoped 
 ### Usage
 
 ```bash
-python3 -m prototype.cli --transcript TRANSCRIPT_PATH --pr 3 --repo owner/name
+builtwithai --transcript TRANSCRIPT_PATH --pr 3 --repo owner/name
 ```
 
 Examples:
 
 ```bash
-python3 -m prototype.cli --transcript transcript.txt --pr 3 --repo owner/name
-python3 -m prototype.cli --transcript transcript.txt --pr https://github.com/owner/name/pull/3
-python3 -m prototype.cli --transcript transcript.txt --pr 3 --issue 1 --repo owner/name
-python3 -m prototype.cli --transcript transcript.txt --pr 3 --policy AI_POLICY.md --repo owner/name
+builtwithai --transcript transcript.txt --pr 3 --repo owner/name
+builtwithai --transcript transcript.txt --pr https://github.com/owner/name/pull/3
+builtwithai --transcript transcript.txt --pr 3 --issue 1 --repo owner/name
+builtwithai --transcript transcript.txt --pr 3 --policy AI_POLICY.md --repo owner/name
 ```
 
 To choose from recent coding-agent sessions interactively:
 
 ```bash
-python3 -m prototype.cli --pick-transcript --pr 3 --repo owner/name
+builtwithai --pick-transcript --pr 3 --repo owner/name
 ```
 
 The picker currently treats selected sessions as text transcripts. It can discover recent Codex, Claude Code, and OpenCode session files from their default local locations, and each location can be overridden with:
@@ -93,7 +100,7 @@ BUILTWITHAI_OPENCODE_SESSIONS_DIR=/path/to/opencode/sessions
 By default, the public receipt is printed to stdout. Optional outputs:
 
 ```bash
-python3 -m prototype.cli --transcript transcript.txt \
+builtwithai --transcript transcript.txt \
   --pr 3 \
   --repo owner/name \
   --receipt-output receipt.md \

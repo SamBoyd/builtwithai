@@ -1,4 +1,6 @@
 import json
+import tomllib
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -19,6 +21,7 @@ from prototype.schemas import (
 
 
 EMPTY_CONFIG = Config(github_token=None)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture(autouse=True)
@@ -100,6 +103,28 @@ class TestCliHelp:
         assert "--private-eval-output" in result.output
         assert "--overwrite" in result.output
         assert "Allow overwriting existing output files." in result.output
+
+
+class TestPackageMetadata:
+    def test_exposes_builtwithai_console_script(self):
+        metadata = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+        assert metadata["project"]["scripts"]["builtwithai"] == "prototype.cli:cli"
+        assert metadata["tool"]["setuptools"]["packages"]["find"]["include"] == ["prototype*"]
+
+    def test_separates_runtime_and_dev_dependencies(self):
+        metadata = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+        dependencies = metadata["project"]["dependencies"]
+        assert "click==8.4.1" in dependencies
+        assert "instructor==1.15.1" in dependencies
+        assert "openai==2.38.0" in dependencies
+        assert "PyGithub==2.9.1" in dependencies
+        assert "pydantic==2.13.4" in dependencies
+        assert "python-dotenv==1.2.2" in dependencies
+        assert "textual==8.2.7" in dependencies
+        assert "pytest==9.0.3" not in dependencies
+        assert metadata["project"]["optional-dependencies"]["dev"] == ["pytest==9.0.3"]
 
 
 class TestTranscriptSource:
