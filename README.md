@@ -64,22 +64,36 @@ The prototype only needs read access. Prefer a fine-grained GitHub token scoped 
 ### Usage
 
 ```bash
-python3 -m prototype.cli TRANSCRIPT_PATH --pr 3 --repo owner/name
+python3 -m prototype.cli --transcript TRANSCRIPT_PATH --pr 3 --repo owner/name
 ```
 
 Examples:
 
 ```bash
-python3 -m prototype.cli transcript.txt --pr 3 --repo owner/name
-python3 -m prototype.cli transcript.txt --pr https://github.com/owner/name/pull/3
-python3 -m prototype.cli transcript.txt --pr 3 --issue 1 --repo owner/name
-python3 -m prototype.cli transcript.txt --pr 3 --policy AI_POLICY.md --repo owner/name
+python3 -m prototype.cli --transcript transcript.txt --pr 3 --repo owner/name
+python3 -m prototype.cli --transcript transcript.txt --pr https://github.com/owner/name/pull/3
+python3 -m prototype.cli --transcript transcript.txt --pr 3 --issue 1 --repo owner/name
+python3 -m prototype.cli --transcript transcript.txt --pr 3 --policy AI_POLICY.md --repo owner/name
+```
+
+To choose from recent coding-agent sessions interactively:
+
+```bash
+python3 -m prototype.cli --pick-transcript --pr 3 --repo owner/name
+```
+
+The picker currently treats selected sessions as text transcripts. It can discover recent Codex, Claude Code, and OpenCode session files from their default local locations, and each location can be overridden with:
+
+```bash
+BUILTWITHAI_CODEX_SESSIONS_DIR=/path/to/codex/sessions
+BUILTWITHAI_CLAUDE_CODE_SESSIONS_DIR=/path/to/claude/sessions
+BUILTWITHAI_OPENCODE_SESSIONS_DIR=/path/to/opencode/sessions
 ```
 
 By default, the public receipt is printed to stdout. Optional outputs:
 
 ```bash
-python3 -m prototype.cli transcript.txt \
+python3 -m prototype.cli --transcript transcript.txt \
   --pr 3 \
   --repo owner/name \
   --receipt-output receipt.md \
