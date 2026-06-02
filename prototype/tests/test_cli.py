@@ -89,7 +89,8 @@ class TestCliHelp:
         result = CliRunner().invoke(cli, ["--help"])
 
         assert result.exit_code == 0
-        assert "TRANSCRIPT_PATH" in result.output
+        assert "--transcript" in result.output
+        assert "--pick-transcript" in result.output
         assert "--pr" in result.output
         assert "--issue" in result.output
         assert "--repo" in result.output
@@ -99,6 +100,105 @@ class TestCliHelp:
         assert "--private-eval-output" in result.output
         assert "--overwrite" in result.output
         assert "Allow overwriting existing output files." in result.output
+
+
+class TestTranscriptSource:
+    @patch("prototype.cli.get_repository_root")
+    @patch("prototype.cli.load_policy_context")
+    @patch("prototype.transcript.load_transcript")
+    @patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+    @patch("prototype.cli.resolve_repository", return_value="owner/repo")
+    @patch("prototype.cli.get_pull_request_context")
+    @patch("prototype.cli.generate_receipt")
+    @patch("prototype.cli.build_receipt_prompt", return_value="receipt prompt")
+    @patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+    def test_transcript_option_supplies_transcript_path(
+        self,
+        parse_pr_reference,
+        build_receipt_prompt,
+        generate_receipt,
+        get_pull_request_context,
+        resolve_repository,
+        get_origin_repository,
+        load_transcript,
+        load_policy_context,
+        get_repository_root,
+        tmp_path,
+    ):
+        transcript_path = tmp_path / "session.jsonl"
+        transcript_path.write_text("session", encoding="utf-8")
+        loaded_transcript = SimpleNamespace(path=transcript_path, mode="text", content="session")
+        load_transcript.return_value = loaded_transcript
+        get_repository_root.return_value = tmp_path
+        load_policy_context.return_value = policy_context()
+        get_pull_request_context.return_value = pr_context()
+        generate_receipt.return_value = receipt_result()
+
+        result = CliRunner().invoke(
+            cli,
+            ["--transcript", str(transcript_path), "--pr", "3"],
+        )
+
+        assert result.exit_code == 0
+        load_transcript.assert_called_once_with(transcript_path)
+
+    @patch("prototype.cli.get_repository_root")
+    @patch("prototype.cli.load_policy_context")
+    @patch("prototype.transcript.load_transcript")
+    @patch("prototype.cli.get_origin_repository", return_value="owner/repo")
+    @patch("prototype.cli.resolve_repository", return_value="owner/repo")
+    @patch("prototype.cli.get_pull_request_context")
+    @patch("prototype.cli.generate_receipt")
+    @patch("prototype.cli.build_receipt_prompt", return_value="receipt prompt")
+    @patch("prototype.cli.parse_pr_reference", return_value=pr_reference(number=3))
+    @patch("prototype.cli.pick_transcript")
+    def test_pick_transcript_supplies_transcript_path(
+        self,
+        pick_transcript,
+        parse_pr_reference,
+        build_receipt_prompt,
+        generate_receipt,
+        get_pull_request_context,
+        resolve_repository,
+        get_origin_repository,
+        load_transcript,
+        load_policy_context,
+        get_repository_root,
+        tmp_path,
+    ):
+        selected = tmp_path / "session.jsonl"
+        selected.write_text("session", encoding="utf-8")
+        pick_transcript.return_value = selected
+        loaded_transcript = SimpleNamespace(path=selected, mode="text", content="session")
+        load_transcript.return_value = loaded_transcript
+        get_repository_root.return_value = tmp_path
+        load_policy_context.return_value = policy_context()
+        get_pull_request_context.return_value = pr_context()
+        generate_receipt.return_value = receipt_result()
+
+        result = CliRunner().invoke(cli, ["--pick-transcript", "--pr", "3"])
+
+        assert result.exit_code == 0
+        pick_transcript.assert_called_once_with()
+        load_transcript.assert_called_once_with(selected)
+
+    def test_requires_transcript_source(self):
+        result = CliRunner().invoke(cli, ["--pr", "3"])
+
+        assert result.exit_code != 0
+        assert "Pass --transcript or --pick-transcript." in result.output
+
+    def test_rejects_conflicting_transcript_sources(self, tmp_path):
+        transcript_path = tmp_path / "session.jsonl"
+        transcript_path.write_text("session", encoding="utf-8")
+
+        result = CliRunner().invoke(
+            cli,
+            ["--transcript", str(transcript_path), "--pick-transcript", "--pr", "3"],
+        )
+
+        assert result.exit_code != 0
+        assert "Pass only one of --transcript or --pick-transcript." in result.output
 
 
 class TestReceiptGeneration:
@@ -137,7 +237,7 @@ class TestReceiptGeneration:
         transcript_path = tmp_path / "transcript.txt"
         transcript_path.write_text("user: please make the change\n", encoding="utf-8")
 
-        result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "3"])
+        result = CliRunner().invoke(cli, ["--transcript", str(transcript_path), "--pr", "3"])
 
         assert result.exit_code == 0
         parse_pr_reference.assert_called_once_with("3")
@@ -200,7 +300,7 @@ class TestReceiptGeneration:
         get_pull_request_context.return_value = pr
         generate_receipt.return_value = receipt_result()
 
-        result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "3"])
+        result = CliRunner().invoke(cli, ["--transcript", str(transcript_path), "--pr", "3"])
 
         assert result.exit_code == 0
         load_transcript.assert_called_once_with(transcript_path)
@@ -253,7 +353,7 @@ class TestReceiptGeneration:
         transcript_path = tmp_path / "transcript.txt"
         transcript_path.write_text("content\n", encoding="utf-8")
 
-        result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "3", "--issue", "1"])
+        result = CliRunner().invoke(cli, ["--transcript", str(transcript_path), "--pr", "3", "--issue", "1"])
 
         assert result.exit_code == 0
         parse_pr_reference.assert_called_once_with("3")
@@ -297,7 +397,7 @@ class TestReceiptGeneration:
 
         result = CliRunner().invoke(
             cli,
-            [str(transcript_path), "--pr", "https://github.com/owner/repo/pull/17"],
+            ["--transcript", str(transcript_path), "--pr", "https://github.com/owner/repo/pull/17"],
         )
 
         assert result.exit_code == 0
@@ -333,7 +433,7 @@ class TestReceiptGeneration:
         transcript_path.write_text("content\n", encoding="utf-8")
 
         result = CliRunner().invoke(
-            cli, [str(transcript_path), "--pr", "3", "--repo", "owner/repo"]
+            cli, ["--transcript", str(transcript_path), "--pr", "3", "--repo", "owner/repo"]
         )
 
         assert result.exit_code == 0
@@ -369,7 +469,7 @@ class TestReceiptGeneration:
         transcript_path = tmp_path / "transcript.txt"
         transcript_path.write_text("content\n", encoding="utf-8")
 
-        result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "42"])
+        result = CliRunner().invoke(cli, ["--transcript", str(transcript_path), "--pr", "42"])
 
         assert result.exit_code == 0
         build_receipt_prompt.assert_called_once()
@@ -412,7 +512,7 @@ class TestPrivateEvaluationOutput:
 
         result = CliRunner().invoke(
             cli,
-            [str(transcript_path), "--pr", "3", "--show-private-eval"],
+            ["--transcript", str(transcript_path), "--pr", "3", "--show-private-eval"],
         )
 
         assert result.exit_code == 0
@@ -459,6 +559,7 @@ class TestPrivateEvaluationOutput:
         result = CliRunner().invoke(
             cli,
             [
+                "--transcript",
                 str(transcript_path),
                 "--pr",
                 "3",
@@ -492,6 +593,7 @@ class TestPrivateEvaluationOutput:
         result = CliRunner().invoke(
             cli,
             [
+                "--transcript",
                 str(transcript_path),
                 "--pr",
                 "3",
@@ -542,6 +644,7 @@ class TestPrivateEvaluationOutput:
         result = CliRunner().invoke(
             cli,
             [
+                "--transcript",
                 str(transcript_path),
                 "--pr",
                 "3",
@@ -595,6 +698,7 @@ class TestReceiptOutput:
         result = CliRunner().invoke(
             cli,
             [
+                "--transcript",
                 str(transcript_path),
                 "--pr",
                 "3",
@@ -630,6 +734,7 @@ class TestReceiptOutput:
         result = CliRunner().invoke(
             cli,
             [
+                "--transcript",
                 str(transcript_path),
                 "--pr",
                 "3",
@@ -682,6 +787,7 @@ class TestReceiptOutput:
         result = CliRunner().invoke(
             cli,
             [
+                "--transcript",
                 str(transcript_path),
                 "--pr",
                 "3",
@@ -734,6 +840,7 @@ class TestReceiptOutput:
         result = CliRunner().invoke(
             cli,
             [
+                "--transcript",
                 str(transcript_path),
                 "--pr",
                 "3",
@@ -795,7 +902,7 @@ class TestPolicyOption:
 
         result = CliRunner().invoke(
             cli,
-            [str(transcript_path), "--pr", "3", "--policy", str(policy_path)],
+            ["--transcript", str(transcript_path), "--pr", "3", "--policy", str(policy_path)],
         )
 
         assert result.exit_code == 0
@@ -844,7 +951,7 @@ class TestPolicyOption:
         get_pull_request_context.return_value = pr_context()
         generate_receipt.return_value = receipt_result()
 
-        result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "3"])
+        result = CliRunner().invoke(cli, ["--transcript", str(transcript_path), "--pr", "3"])
 
         assert result.exit_code == 0
         get_repository_root.assert_called_once_with()
@@ -858,7 +965,7 @@ class TestPolicyOption:
 
         result = CliRunner().invoke(
             cli,
-            [str(transcript_path), "--pr", "3", "--policy", str(missing_policy)],
+            ["--transcript", str(transcript_path), "--pr", "3", "--policy", str(missing_policy)],
         )
 
         assert result.exit_code != 0
@@ -889,7 +996,7 @@ class TestCliErrors:
         transcript_path = tmp_path / "transcript.txt"
         transcript_path.write_text("content\n", encoding="utf-8")
 
-        result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "3"])
+        result = CliRunner().invoke(cli, ["--transcript", str(transcript_path), "--pr", "3"])
 
         assert result.exit_code != 0
         build_receipt_prompt.assert_called_once()
@@ -920,6 +1027,7 @@ class TestCliErrors:
         result = CliRunner().invoke(
             cli,
             [
+                "--transcript",
                 str(transcript_path),
                 "--pr",
                 "https://github.com/url-owner/url-repo/pull/3",
@@ -947,7 +1055,7 @@ class TestCliErrors:
         transcript_path = tmp_path / "transcript.txt"
         transcript_path.write_text("content\n", encoding="utf-8")
 
-        result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "3"])
+        result = CliRunner().invoke(cli, ["--transcript", str(transcript_path), "--pr", "3"])
 
         assert result.exit_code != 0
         assert 'pass "--repo owner/name"' in result.output
@@ -956,7 +1064,7 @@ class TestCliErrors:
         transcript_path = tmp_path / "transcript.txt"
         transcript_path.write_text("content\n", encoding="utf-8")
 
-        result = CliRunner().invoke(cli, [str(transcript_path)])
+        result = CliRunner().invoke(cli, ["--transcript", str(transcript_path)])
 
         assert result.exit_code != 0
         assert "Missing option '--pr'" in result.output
@@ -971,7 +1079,7 @@ class TestCliErrors:
                 "PR must be a positive integer or GitHub PR URL"
             ),
         ):
-            result = CliRunner().invoke(cli, [str(transcript_path), "--pr", "not-a-pr"])
+            result = CliRunner().invoke(cli, ["--transcript", str(transcript_path), "--pr", "not-a-pr"])
 
         assert result.exit_code != 0
         assert "PR must be a positive integer or GitHub PR URL" in result.output
@@ -988,7 +1096,7 @@ class TestCliErrors:
         ):
             result = CliRunner().invoke(
                 cli,
-                [str(transcript_path), "--pr", "3", "--issue", "not-an-issue"],
+                ["--transcript", str(transcript_path), "--pr", "3", "--issue", "not-an-issue"],
             )
 
         assert result.exit_code != 0
@@ -1019,6 +1127,7 @@ class TestCliErrors:
         result = CliRunner().invoke(
             cli,
             [
+                "--transcript",
                 str(transcript_path),
                 "--pr",
                 "3",
@@ -1037,7 +1146,7 @@ class TestCliErrors:
     def test_missing_transcript_path_fails_before_command_execution(self, tmp_path):
         missing_path = tmp_path / "missing.txt"
 
-        result = CliRunner().invoke(cli, [str(missing_path), "--pr", "3"])
+        result = CliRunner().invoke(cli, ["--transcript", str(missing_path), "--pr", "3"])
 
         assert result.exit_code != 0
         assert "does not exist" in result.output

@@ -17,6 +17,7 @@ from prototype.llm_client import LLMClientError, generate_receipt
 from prototype.policy import PolicyContextError, get_repository_root, load_policy_context
 from prototype.prompt import build_receipt_prompt
 from prototype.render import render_private_evaluation, render_public_receipt
+from prototype.transcript_picker import TranscriptPickerError, pick_transcript
 from prototype import transcript
 
 
@@ -46,10 +47,17 @@ def parse_repo(ctx, param, value):
 
 
 @click.command()
-@click.argument(
+@click.option(
+    "--transcript",
     "transcript_path",
     type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
-    metavar="TRANSCRIPT_PATH",
+    help="Path to the coding-agent transcript to evaluate.",
+)
+@click.option(
+    "--pick-transcript",
+    "pick_transcript_enabled",
+    is_flag=True,
+    help="Choose a recent coding-agent transcript interactively.",
 )
 @click.option("--pr", "pr_number", required=True, callback=parse_pr, help="PR number or GitHub PR URL.")
 @click.option("--issue", "issue_number", callback=parse_issue, help="Issue number or GitHub issue URL.")
@@ -82,6 +90,7 @@ def parse_repo(ctx, param, value):
 )
 def cli(
     transcript_path,
+    pick_transcript_enabled,
     pr_number,
     issue_number,
     policy_path,
@@ -91,6 +100,16 @@ def cli(
     private_eval_output,
     overwrite,
 ):
+    if transcript_path is not None and pick_transcript_enabled:
+        raise click.UsageError("Pass only one of --transcript or --pick-transcript.")
+    if pick_transcript_enabled:
+        try:
+            transcript_path = pick_transcript()
+        except TranscriptPickerError as error:
+            raise click.ClickException(str(error)) from error
+    elif transcript_path is None:
+        raise click.UsageError("Pass --transcript or --pick-transcript.")
+
     if receipt_output is not None and receipt_output.exists() and not overwrite:
         raise click.ClickException(
             f'receipt output file "{receipt_output}" already exists; pass --overwrite to replace it'
