@@ -12,16 +12,39 @@ class TranscriptPickerApp:
 
 
 def _build_textual_app():
+    from datetime import datetime, timezone
+
     from textual.app import App, ComposeResult
     from textual.containers import Vertical
     from textual.widgets import Footer, Header, ListItem, ListView, Select, Static
 
     from prototype.session_discovery import AGENTS, SessionCandidate, discover_sessions
 
+    def format_session_item(session: SessionCandidate) -> str:
+        metadata = session.metadata
+        title = metadata.title or session.label
+        details = [
+            f"Project: {_project_name(metadata.cwd)}",
+            f"Updated: {_format_datetime(metadata.updated_at)}",
+            f"Created: {_format_datetime(metadata.created_at)}",
+            f"Prompts: {metadata.user_prompt_count}",
+        ]
+        return f"{title}\n{' | '.join(details)}\n{session.label}"
+
+    def _format_datetime(value: datetime | None) -> str:
+        if value is None:
+            return "unknown"
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    def _project_name(value: Path | None) -> str:
+        if value is None:
+            return "unknown"
+        return value.name or str(value)
+
     class SessionListItem(ListItem):
         def __init__(self, session: SessionCandidate):
             self.session = session
-            super().__init__(Static(f"{session.label}\n{session.path}"))
+            super().__init__(Static(format_session_item(session)))
 
         def watch_highlighted(self, highlighted: bool) -> None:
             self.set_class(highlighted, "selected-transcript")

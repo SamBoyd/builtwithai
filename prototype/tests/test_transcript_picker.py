@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 from types import ModuleType
@@ -6,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 
 from prototype.session_discovery import SessionCandidate
+from prototype.session_metadata import SessionMetadata
 from prototype.transcript_picker import (
     TranscriptPickerError,
     _build_textual_app,
@@ -94,6 +96,17 @@ class FakeFooter(FakeWidget):
     pass
 
 
+def session_metadata():
+    return SessionMetadata(
+        title="Improve transcript picker",
+        created_at=datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 6, 1, 10, 5, tzinfo=timezone.utc),
+        cwd=Path("/repo/app"),
+        user_prompt_count=4,
+        files_edited=("app.py",),
+    )
+
+
 def install_fake_textual(monkeypatch):
     FakeListView.instances = []
     textual_module = ModuleType("textual")
@@ -163,6 +176,7 @@ class TestTextualTranscriptPickerApp:
                         label="session.jsonl",
                         path=Path("/tmp/session.jsonl"),
                         modified_at=1.0,
+                        metadata=session_metadata(),
                     )
                 ]
             ),
@@ -173,3 +187,32 @@ class TestTextualTranscriptPickerApp:
         app._refresh_sessions()
 
         assert FakeListView.instances[-1].index == 0
+
+    def test_session_row_uses_metadata(self, monkeypatch):
+        install_fake_textual(monkeypatch)
+        monkeypatch.setattr(
+            "prototype.session_discovery.discover_sessions",
+            Mock(
+                return_value=[
+                    SessionCandidate(
+                        agent="codex",
+                        label="rollout.jsonl",
+                        path=Path("/tmp/session.jsonl"),
+                        modified_at=1.0,
+                        metadata=session_metadata(),
+                    )
+                ]
+            ),
+        )
+        app = _build_textual_app()
+        list(app.compose())
+
+        app._refresh_sessions()
+
+        row_text = FakeListView.instances[-1].items[0].args[0].renderable
+        assert "Improve transcript picker" in row_text
+        assert "Prompts: 4" in row_text
+        assert "Project: app" in row_text
+        assert "Updated: 2026-06-01 10:05 UTC" in row_text
+        assert "Created: 2026-06-01 10:00 UTC" in row_text
+        assert "/tmp/session.jsonl" not in row_text

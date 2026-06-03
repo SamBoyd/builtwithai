@@ -2,6 +2,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from prototype.session_metadata import SessionMetadata, parse_session_metadata
+
 
 @dataclass(frozen=True)
 class AgentDefinition:
@@ -17,6 +19,7 @@ class SessionCandidate:
     path: Path
     label: str
     modified_at: float
+    metadata: SessionMetadata
 
 
 AGENTS = {
@@ -64,6 +67,7 @@ def discover_sessions(agent_name: str, limit: int = 25) -> list[SessionCandidate
             path=path,
             label=path.name,
             modified_at=path.stat().st_mtime,
+            metadata=parse_session_metadata(agent.name, path),
         )
         for path in root.glob(agent.glob_pattern)
         if path.is_file()
