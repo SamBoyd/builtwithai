@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
 
+MAX_TITLE_LENGTH = 122
+TITLE_ELLIPSIS = "..."
+
+
 class CodexRolloutLine(TypedDict):
     timestamp: NotRequired[str]
     type: str
@@ -132,6 +136,8 @@ def _normalize_title(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = " ".join(value.split())
+    if len(normalized) > MAX_TITLE_LENGTH:
+        return f"{normalized[: MAX_TITLE_LENGTH - len(TITLE_ELLIPSIS)]}{TITLE_ELLIPSIS}"
     return normalized or None
 
 

@@ -54,6 +54,26 @@ class TestParseCodexSessionMetadata:
         assert metadata.title == "Please fix the tests"
         assert metadata.user_prompt_count == 1
 
+    def test_truncates_long_prompt_titles(self, tmp_path):
+        session = tmp_path / "rollout.jsonl"
+        long_prompt = "A" * 200
+        session.write_text(
+            "\n".join(
+                [
+                    (
+                        '{"timestamp":"2026-06-01T10:00:00Z","type":"event_msg",'
+                        f'"payload":{{"type":"user_message","message":"{long_prompt}"}}}}'
+                    ),
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        metadata = parse_session_metadata("codex", session)
+
+        assert metadata.title == f'{"A" * 119}...'
+        assert len(metadata.title) == 122
+
     def test_returns_empty_metadata_for_unsupported_agent(self, tmp_path):
         session = tmp_path / "session.jsonl"
         session.write_text("{}", encoding="utf-8")
