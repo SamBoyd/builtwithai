@@ -6,6 +6,12 @@ from prototype.schemas import ReceiptResult
 
 DEFAULT_MODEL = DEFAULT_LLM_MODEL
 DEFAULT_TEMPERATURE = 1
+PROVIDER_EXTRAS = {
+    "openai": "openai",
+    "google": "google",
+    "generative-ai": "google",
+    "groq": "groq",
+}
 
 
 class LLMClientError(Exception):
@@ -17,11 +23,11 @@ def _provider_from_model(model: str) -> str:
         provider, model_name = model.split("/", 1)
     except ValueError:
         raise LLMClientError(
-            'LLM_MODEL must use model string format, like "openai/gpt-5.5"'
+            'LLM_MODEL must use model string format, like "anthropic/claude-sonnet-4-6"'
         ) from None
     if not provider or not model_name:
         raise LLMClientError(
-            'LLM_MODEL must use model string format, like "openai/gpt-5.5"'
+            'LLM_MODEL must use model string format, like "anthropic/claude-sonnet-4-6"'
         )
     return provider
 
@@ -34,6 +40,23 @@ def _api_key_for_provider(config: Config, provider: str) -> str:
     if not api_key:
         raise LLMClientError(f"{env_name} is required to generate a receipt with {provider}")
     return api_key
+
+
+def _provider_dependency_guidance(provider: str) -> str | None:
+    if provider == "anthropic":
+        return (
+            "The Anthropic SDK is included in the base BuiltWithAI install; "
+            "reinstall or upgrade BuiltWithAI."
+        )
+    extra = PROVIDER_EXTRAS.get(provider)
+    if extra is None:
+        return None
+    return f'Install BuiltWithAI with provider support, for example `builtwithai[{extra}]`.'
+
+
+def _missing_provider_sdk_message(error: Exception) -> bool:
+    message = str(error).lower()
+    return "package is required" in message and "provider" in message
 
 
 def generate_receipt(prompt: str, config: Config) -> ReceiptResult:
@@ -49,4 +72,9 @@ def generate_receipt(prompt: str, config: Config) -> ReceiptResult:
             temperature=DEFAULT_TEMPERATURE,
         )
     except Exception as error:
-        raise LLMClientError(f"could not generate receipt with {model}: {error}") from error
+        message = f"could not generate receipt with {model}: {error}"
+        if _missing_provider_sdk_message(error):
+            guidance = _provider_dependency_guidance(provider)
+            if guidance is not None:
+                message = f"{message} {guidance}"
+        raise LLMClientError(message) from error

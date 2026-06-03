@@ -41,7 +41,7 @@ For development from a cloned repository, install the package and test dependenc
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install -e ".[dev]"
+python3 -m pip install -e ".[dev,all]"
 builtwithai --help
 ```
 
@@ -54,7 +54,7 @@ cp .env.example .env
 Then choose exactly one `LLM_MODEL` line in `.env` and set the matching provider API key. The model value must use Instructor's `provider/model-name` format:
 
 ```dotenv
-LLM_MODEL=anthropic/claude-sonnet-4-0-20250514
+LLM_MODEL=anthropic/claude-sonnet-4-6
 ANTHROPIC_API_KEY=...
 ```
 
@@ -64,7 +64,16 @@ The `.env.example` file includes commented alternatives for OpenAI, Google, and 
 GITHUB_TOKEN=github_pat_...
 ```
 
-If `LLM_MODEL` is not set, the prototype defaults to `openai/gpt-5.5` and requires `OPENAI_API_KEY`. Exported shell environment variables override values in `.env`.
+If `LLM_MODEL` is not set, the prototype defaults to `anthropic/claude-sonnet-4-6` and requires `ANTHROPIC_API_KEY`. Exported shell environment variables override values in `.env`.
+
+The default install includes Anthropic support. Install optional provider SDKs with extras:
+
+```bash
+pipx install "builtwithai[google] @ git+https://github.com/samboyd/builtwithai.git"
+pipx install "builtwithai[openai] @ git+https://github.com/samboyd/builtwithai.git"
+pipx install "builtwithai[groq] @ git+https://github.com/samboyd/builtwithai.git"
+pipx install "builtwithai[all] @ git+https://github.com/samboyd/builtwithai.git"
+```
 
 The prototype only needs read access. Prefer a fine-grained GitHub token scoped to the target repository with read-only Metadata, Pull requests, Issues, and Contents access. It does not need permission to comment, push, administer repositories, manage workflows, or read secrets.
 

@@ -5,7 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-DEFAULT_LLM_MODEL = "openai/gpt-5.5"
+DEFAULT_LLM_MODEL = "anthropic/claude-sonnet-4-6"
 
 PROVIDER_API_KEY_ENV_NAMES = {
     "openai": "OPENAI_API_KEY",

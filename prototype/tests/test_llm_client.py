@@ -44,13 +44,13 @@ class TestGenerateReceipt:
 
         with pytest.raises(
             LLMClientError,
-            match="OPENAI_API_KEY is required to generate a receipt with openai",
+            match="ANTHROPIC_API_KEY is required to generate a receipt with anthropic",
         ):
             generate_receipt(
                 "prompt",
                 Config(
                     github_token=None,
-                    provider_api_keys={"openai": None},
+                    provider_api_keys={"anthropic": None},
                 ),
             )
 
@@ -67,12 +67,15 @@ class TestGenerateReceipt:
             "receipt prompt",
             Config(
                 github_token=None,
-                provider_api_keys={"openai": "test-key"},
+                provider_api_keys={"anthropic": "anthropic-key"},
             ),
         )
 
         assert result == expected_result
-        from_provider.assert_called_once_with("openai/gpt-5.5", api_key="test-key")
+        from_provider.assert_called_once_with(
+            "anthropic/claude-sonnet-4-6",
+            api_key="anthropic-key",
+        )
         from_provider.return_value.create.assert_called_once_with(
             response_model=ReceiptResult,
             messages=[{"role": "user", "content": "receipt prompt"}],
@@ -86,15 +89,15 @@ class TestGenerateReceipt:
 
         generate_receipt(
             "receipt prompt",
-            Config(
-                github_token=None,
-                llm_model="anthropic/claude-sonnet-4-0-20250514",
-                provider_api_keys={"anthropic": "anthropic-key"},
-            ),
-        )
+                Config(
+                    github_token=None,
+                    llm_model="anthropic/claude-sonnet-4-6",
+                    provider_api_keys={"anthropic": "anthropic-key"},
+                ),
+            )
 
         from_provider.assert_called_once_with(
-            "anthropic/claude-sonnet-4-0-20250514",
+            "anthropic/claude-sonnet-4-6",
             api_key="anthropic-key",
         )
 
@@ -122,7 +125,7 @@ class TestGenerateReceipt:
 
         with pytest.raises(
             LLMClientError,
-            match='LLM_MODEL must use model string format, like "openai/gpt-5.5"',
+            match='LLM_MODEL must use model string format, like "anthropic/claude-sonnet-4-6"',
         ):
             generate_receipt(
                 "receipt prompt",
@@ -148,6 +151,45 @@ class TestGenerateReceipt:
                 "receipt prompt",
                 Config(
                     github_token=None,
+                    llm_model="openai/gpt-5.5",
                     provider_api_keys={"openai": "test-key"},
                 ),
             )
+
+    def test_suggests_provider_extra_when_optional_sdk_is_missing(self, from_provider):
+        from prototype.llm_client import LLMClientError, generate_receipt
+
+        from_provider.side_effect = RuntimeError(
+            "The google package is required to use the Google provider."
+        )
+
+        with pytest.raises(LLMClientError) as error:
+            generate_receipt(
+                "receipt prompt",
+                Config(
+                    github_token=None,
+                    llm_model="google/gemini-2.5-flash-preview-04-17",
+                    provider_api_keys={"google": "google-key"},
+                ),
+            )
+
+        assert "builtwithai[google]" in str(error.value)
+
+    def test_suggests_reinstall_when_default_sdk_is_missing(self, from_provider):
+        from prototype.llm_client import LLMClientError, generate_receipt
+
+        from_provider.side_effect = RuntimeError(
+            "The anthropic package is required to use the Anthropic provider."
+        )
+
+        with pytest.raises(LLMClientError) as error:
+            generate_receipt(
+                "receipt prompt",
+                Config(
+                    github_token=None,
+                    provider_api_keys={"anthropic": "anthropic-key"},
+                ),
+            )
+
+        assert "included in the base BuiltWithAI install" in str(error.value)
+        assert "reinstall or upgrade BuiltWithAI" in str(error.value)

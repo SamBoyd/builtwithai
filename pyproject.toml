@@ -8,9 +8,9 @@ version = "0.1.0"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "anthropic==0.105.2",
     "click==8.4.1",
     "instructor==1.15.1",
-    "openai==2.38.0",
     "PyGithub==2.9.1",
     "pydantic==2.13.4",
     "python-dotenv==1.2.2",
@@ -18,6 +18,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+openai = [
+    "openai==2.40.0",
+]
+google = [
+    "google-genai==2.7.0",
+]
+groq = [
+    "groq==1.4.0",
+]
+all = [
+    "openai==2.40.0",
+    "google-genai==2.7.0",
+    "groq==1.4.0",
+]
 dev = [
     "pytest==9.0.3",
 ]

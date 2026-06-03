@@ -116,15 +116,26 @@ class TestPackageMetadata:
         metadata = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
         dependencies = metadata["project"]["dependencies"]
+        assert "anthropic==0.105.2" in dependencies
         assert "click==8.4.1" in dependencies
         assert "instructor==1.15.1" in dependencies
-        assert "openai==2.38.0" in dependencies
         assert "PyGithub==2.9.1" in dependencies
         assert "pydantic==2.13.4" in dependencies
         assert "python-dotenv==1.2.2" in dependencies
         assert "textual==8.2.7" in dependencies
+        assert "openai==2.40.0" not in dependencies
         assert "pytest==9.0.3" not in dependencies
-        assert metadata["project"]["optional-dependencies"]["dev"] == ["pytest==9.0.3"]
+
+        optional_dependencies = metadata["project"]["optional-dependencies"]
+        assert optional_dependencies["openai"] == ["openai==2.40.0"]
+        assert optional_dependencies["google"] == ["google-genai==2.7.0"]
+        assert optional_dependencies["groq"] == ["groq==1.4.0"]
+        assert optional_dependencies["all"] == [
+            "openai==2.40.0",
+            "google-genai==2.7.0",
+            "groq==1.4.0",
+        ]
+        assert optional_dependencies["dev"] == ["pytest==9.0.3"]
 
 
 class TestTranscriptSource:

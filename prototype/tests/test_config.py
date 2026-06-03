@@ -5,6 +5,9 @@ from prototype.config import load_config
 
 
 class TestLoadConfig:
+    def test_default_llm_model_is_anthropic(self):
+        assert DEFAULT_LLM_MODEL == "anthropic/claude-sonnet-4-6"
+
     def test_loads_values_from_repo_dotenv(self, tmp_path, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("LLM_MODEL", raising=False)
@@ -14,7 +17,7 @@ class TestLoadConfig:
         dotenv_path.write_text(
             "\n".join(
                 [
-                    "LLM_MODEL=anthropic/claude-sonnet-4-0-20250514",
+                    "LLM_MODEL=anthropic/claude-sonnet-4-6",
                     "ANTHROPIC_API_KEY=dotenv-anthropic-key",
                     "OPENAI_API_KEY=dotenv-openai-key",
                     "GITHUB_TOKEN=dotenv-github-token",
@@ -26,7 +29,7 @@ class TestLoadConfig:
 
         config = load_config(tmp_path)
 
-        assert config.llm_model == "anthropic/claude-sonnet-4-0-20250514"
+        assert config.llm_model == "anthropic/claude-sonnet-4-6"
         assert config.provider_api_keys["openai"] == "dotenv-openai-key"
         assert config.provider_api_keys["anthropic"] == "dotenv-anthropic-key"
         assert config.github_token == "dotenv-github-token"
