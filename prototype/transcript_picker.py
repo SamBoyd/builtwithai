@@ -1,7 +1,5 @@
 from pathlib import Path
 
-from textual.containers import Horizontal
-
 
 class TranscriptPickerError(Exception):
     pass
@@ -25,11 +23,30 @@ def _build_textual_app():
             self.session = session
             super().__init__(Static(f"{session.label}\n{session.path}"))
 
+        def watch_highlighted(self, highlighted: bool) -> None:
+            self.set_class(highlighted, "selected-transcript")
+
+    class SessionListView(ListView):
+        BINDINGS = [("enter", "select_transcript", "Select transcript")]
+
+        def action_select_transcript(self) -> None:
+            if self.index is None:
+                return
+            item = self.children[self.index]
+            if isinstance(item, SessionListItem):
+                self.app.exit(item.session.path)
+
     class TextualTranscriptPickerApp(App[Path | None]):
-        BINDINGS = [("q", "quit", "Quit")]
-        DEFAULT_CSS = """
+        BINDINGS = [
+            ("q", "quit", "Quit"),
+        ]
+        CSS = """
         .picker-section {
             padding: 1 2;
+        }
+
+        .selected-transcript {
+            border: solid #f7c948;
         }
 
         .title {
@@ -64,7 +81,7 @@ def _build_textual_app():
                         id="agent-select",
                     )
                     yield Static("Transcripts", classes="title")
-                    yield ListView(id="session-list")
+                    yield SessionListView(id="session-list")
             yield Footer()
 
         def on_mount(self) -> None:
@@ -80,10 +97,17 @@ def _build_textual_app():
                 self.exit(item.session.path)
 
         def _refresh_sessions(self) -> None:
-            session_list = self.query_one("#session-list", ListView)
+            session_list = self.query_one("#session-list", SessionListView)
             session_list.clear()
-            for session in discover_sessions(self.agent_name):
-                session_list.append(SessionListItem(session))
+            sessions = discover_sessions(self.agent_name)
+            for index, session in enumerate(sessions):
+                item = SessionListItem(session)
+                if index == 0:
+                    item.highlighted = True
+                    item.set_class(True, "selected-transcript")
+                session_list.append(item)
+            if sessions:
+                session_list.index = 0
 
     return TextualTranscriptPickerApp()
 

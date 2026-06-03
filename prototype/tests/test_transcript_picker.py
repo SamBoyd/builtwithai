@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from prototype.session_discovery import SessionCandidate
 from prototype.transcript_picker import (
     TranscriptPickerError,
     _build_textual_app,
@@ -19,6 +20,9 @@ class FakeApp:
 
     def __init__(self):
         pass
+
+    def query_one(self, _selector, _widget_type):
+        return FakeListView.instances[-1]
 
 
 class FakeWidget:
@@ -51,12 +55,35 @@ class FakeSelect(FakeWidget):
 
 
 class FakeListView(FakeWidget):
+    instances = []
+
     class Selected:
         pass
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.index = None
+        self.items = []
+        self.instances.append(self)
+
+    def clear(self):
+        self.index = None
+        self.items = []
+
+    def append(self, item):
+        self.items.append(item)
+
 
 class FakeListItem(FakeWidget):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.classes = set()
+
+    def set_class(self, enabled, class_name):
+        if enabled:
+            self.classes.add(class_name)
+        else:
+            self.classes.discard(class_name)
 
 
 class FakeHeader(FakeWidget):
@@ -68,6 +95,7 @@ class FakeFooter(FakeWidget):
 
 
 def install_fake_textual(monkeypatch):
+    FakeListView.instances = []
     textual_module = ModuleType("textual")
     app_module = ModuleType("textual.app")
     containers_module = ModuleType("textual.containers")
@@ -123,3 +151,25 @@ class TestTextualTranscriptPickerApp:
 
         assert "Agent" in labels
         assert "Transcripts" in labels
+
+    def test_highlights_first_session_after_refresh(self, monkeypatch):
+        install_fake_textual(monkeypatch)
+        monkeypatch.setattr(
+            "prototype.session_discovery.discover_sessions",
+            Mock(
+                return_value=[
+                    SessionCandidate(
+                        agent="codex",
+                        label="session.jsonl",
+                        path=Path("/tmp/session.jsonl"),
+                        modified_at=1.0,
+                    )
+                ]
+            ),
+        )
+        app = _build_textual_app()
+        list(app.compose())
+
+        app._refresh_sessions()
+
+        assert FakeListView.instances[-1].index == 0
