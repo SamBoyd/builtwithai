@@ -1,9 +1,92 @@
 from pathlib import Path
+import sys
+from types import ModuleType
 from unittest.mock import Mock
 
 import pytest
 
-from prototype.transcript_picker import TranscriptPickerError, pick_transcript
+from prototype.transcript_picker import (
+    TranscriptPickerError,
+    _build_textual_app,
+    pick_transcript,
+)
+
+
+class FakeApp:
+    @classmethod
+    def __class_getitem__(cls, _item):
+        return cls
+
+    def __init__(self):
+        pass
+
+
+class FakeWidget:
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+
+class FakeStatic(FakeWidget):
+    def __init__(self, renderable, **kwargs):
+        super().__init__(renderable, **kwargs)
+        self.renderable = renderable
+
+
+class FakeVertical:
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _exc_type, _exc, _traceback):
+        return False
+
+
+class FakeSelect(FakeWidget):
+    class Changed:
+        pass
+
+
+class FakeListView(FakeWidget):
+    class Selected:
+        pass
+
+
+class FakeListItem(FakeWidget):
+    pass
+
+
+class FakeHeader(FakeWidget):
+    pass
+
+
+class FakeFooter(FakeWidget):
+    pass
+
+
+def install_fake_textual(monkeypatch):
+    textual_module = ModuleType("textual")
+    app_module = ModuleType("textual.app")
+    containers_module = ModuleType("textual.containers")
+    widgets_module = ModuleType("textual.widgets")
+
+    app_module.App = FakeApp
+    app_module.ComposeResult = object
+    containers_module.Vertical = FakeVertical
+    widgets_module.Footer = FakeFooter
+    widgets_module.Header = FakeHeader
+    widgets_module.ListItem = FakeListItem
+    widgets_module.ListView = FakeListView
+    widgets_module.Select = FakeSelect
+    widgets_module.Static = FakeStatic
+
+    monkeypatch.setitem(sys.modules, "textual", textual_module)
+    monkeypatch.setitem(sys.modules, "textual.app", app_module)
+    monkeypatch.setitem(sys.modules, "textual.containers", containers_module)
+    monkeypatch.setitem(sys.modules, "textual.widgets", widgets_module)
 
 
 class TestPickTranscript:
@@ -25,3 +108,18 @@ class TestPickTranscript:
 
         with pytest.raises(TranscriptPickerError, match="no transcript selected"):
             pick_transcript()
+
+
+class TestTextualTranscriptPickerApp:
+    def test_labels_agent_selector_and_session_list(self, monkeypatch):
+        install_fake_textual(monkeypatch)
+        app = _build_textual_app()
+
+        labels = [
+            widget.renderable
+            for widget in app.compose()
+            if isinstance(widget, FakeStatic)
+        ]
+
+        assert "Agent" in labels
+        assert "Transcripts" in labels

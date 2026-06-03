@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from textual.containers import Horizontal
+
 
 class TranscriptPickerError(Exception):
     pass
@@ -25,6 +27,22 @@ def _build_textual_app():
 
     class TextualTranscriptPickerApp(App[Path | None]):
         BINDINGS = [("q", "quit", "Quit")]
+        DEFAULT_CSS = """
+        .picker-section {
+            padding: 1 2;
+        }
+
+        .title {
+            padding: 2 0;
+        }
+
+        .description {
+            padding: 0 0 1 0;
+        }
+
+        """
+
+        box_sizing = "border-box"
 
         def __init__(self):
             super().__init__()
@@ -33,12 +51,20 @@ def _build_textual_app():
         def compose(self) -> ComposeResult:
             yield Header()
             with Vertical():
-                yield Select(
-                    [(name, name) for name in AGENTS],
-                    value=self.agent_name,
-                    id="agent-select",
-                )
-                yield ListView(id="session-list")
+                with Vertical(classes="picker-section"):
+                    yield Static("Pick a transcript", classes="title")
+                    yield Static(
+                        "Choose an agent, then select the session transcript to inspect.",
+                        classes="description",
+                    )
+                    yield Static("Agent", classes="title")
+                    yield Select(
+                        [(name, name) for name in AGENTS],
+                        value=self.agent_name,
+                        id="agent-select",
+                    )
+                    yield Static("Transcripts", classes="title")
+                    yield ListView(id="session-list")
             yield Footer()
 
         def on_mount(self) -> None:
