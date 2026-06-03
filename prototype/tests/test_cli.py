@@ -123,6 +123,7 @@ class TestPackageMetadata:
         assert "pydantic==2.13.4" in dependencies
         assert "python-dotenv==1.2.2" in dependencies
         assert "textual==8.2.7" in dependencies
+        assert "humanize==4.15.0" in dependencies
         assert "openai==2.40.0" not in dependencies
         assert "pytest==9.0.3" not in dependencies
 

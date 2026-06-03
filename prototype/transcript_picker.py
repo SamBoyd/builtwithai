@@ -16,6 +16,7 @@ class TranscriptPickerApp:
 def _build_textual_app():
     from datetime import datetime, timezone
 
+    import humanize
     from textual.app import App, ComposeResult
     from textual.containers import Vertical
     from textual.widgets import Footer, Header, ListItem, ListView, Select, Static
@@ -39,7 +40,10 @@ def _build_textual_app():
     def _format_datetime(value: datetime | None) -> str:
         if value is None:
             return "unknown"
-        return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        return humanize.naturaltime(
+            value.astimezone(timezone.utc),
+            when=datetime.now(timezone.utc),
+        )
 
     def _project_name(value: Path | None) -> str:
         if value is None:

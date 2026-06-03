@@ -130,6 +130,15 @@ def install_fake_textual(monkeypatch):
     monkeypatch.setitem(sys.modules, "textual.widgets", widgets_module)
 
 
+def install_fake_humanize(monkeypatch, *formatted_datetimes):
+    humanize_module = ModuleType("humanize")
+    humanize_module.naturaltime = Mock(side_effect=formatted_datetimes)
+
+    monkeypatch.setitem(sys.modules, "humanize", humanize_module)
+
+    return humanize_module
+
+
 class TestPickTranscript:
     def test_returns_selected_path_from_app(self, monkeypatch):
         selected = Path("/tmp/session.jsonl")
@@ -190,6 +199,11 @@ class TestTextualTranscriptPickerApp:
 
     def test_session_row_uses_metadata(self, monkeypatch):
         install_fake_textual(monkeypatch)
+        humanize_module = install_fake_humanize(
+            monkeypatch,
+            "5 minutes ago",
+            "10 minutes ago",
+        )
         monkeypatch.setattr(
             "prototype.session_discovery.discover_sessions",
             Mock(
@@ -213,10 +227,11 @@ class TestTextualTranscriptPickerApp:
         assert "Improve transcript picker" in row_text
         assert "[dim]Prompts:[/dim] 4" in row_text
         assert "[dim]Project:[/dim] app" in row_text
-        assert "[dim]Updated:[/dim] 2026-06-01 10:05 UTC" in row_text
-        assert "[dim]Created:[/dim] 2026-06-01 10:00 UTC" in row_text
+        assert "[dim]Updated:[/dim] 5 minutes ago" in row_text
+        assert "[dim]Created:[/dim] 10 minutes ago" in row_text
         assert "[dim]|[/dim]" in row_text
         assert "/tmp/session.jsonl" not in row_text
+        assert humanize_module.naturaltime.call_count == 2
 
     def test_session_row_uses_stable_item_class(self, monkeypatch):
         install_fake_textual(monkeypatch)
