@@ -211,8 +211,33 @@ class TestTextualTranscriptPickerApp:
 
         row_text = FakeListView.instances[-1].items[0].args[0].renderable
         assert "Improve transcript picker" in row_text
-        assert "Prompts: 4" in row_text
-        assert "Project: app" in row_text
-        assert "Updated: 2026-06-01 10:05 UTC" in row_text
-        assert "Created: 2026-06-01 10:00 UTC" in row_text
+        assert "[dim]Prompts:[/dim] 4" in row_text
+        assert "[dim]Project:[/dim] app" in row_text
+        assert "[dim]Updated:[/dim] 2026-06-01 10:05 UTC" in row_text
+        assert "[dim]Created:[/dim] 2026-06-01 10:00 UTC" in row_text
+        assert "[dim]|[/dim]" in row_text
         assert "/tmp/session.jsonl" not in row_text
+
+    def test_session_row_uses_stable_item_class(self, monkeypatch):
+        install_fake_textual(monkeypatch)
+        monkeypatch.setattr(
+            "prototype.session_discovery.discover_sessions",
+            Mock(
+                return_value=[
+                    SessionCandidate(
+                        agent="codex",
+                        label="rollout.jsonl",
+                        path=Path("/tmp/session.jsonl"),
+                        modified_at=1.0,
+                        metadata=session_metadata(),
+                    )
+                ]
+            ),
+        )
+        app = _build_textual_app()
+        list(app.compose())
+
+        app._refresh_sessions()
+
+        row_item = FakeListView.instances[-1].items[0]
+        assert row_item.kwargs["classes"] == "session-list-item"

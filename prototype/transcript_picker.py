@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from textual.widgets import Rule
+
 
 class TranscriptPickerError(Exception):
     pass
@@ -24,12 +26,15 @@ def _build_textual_app():
         metadata = session.metadata
         title = metadata.title or session.label
         details = [
-            f"Project: {_project_name(metadata.cwd)}",
-            f"Updated: {_format_datetime(metadata.updated_at)}",
-            f"Created: {_format_datetime(metadata.created_at)}",
-            f"Prompts: {metadata.user_prompt_count}",
+            _format_detail("Project", _project_name(metadata.cwd)),
+            _format_detail("Updated", _format_datetime(metadata.updated_at)),
+            _format_detail("Created", _format_datetime(metadata.created_at)),
+            _format_detail("Prompts", str(metadata.user_prompt_count)),
         ]
-        return f"{title}\n{' | '.join(details)}\n{session.label}"
+        return f"{title}\n{' [dim]|[/dim] '.join(details)}\n{session.label}"
+
+    def _format_detail(label: str, value: str) -> str:
+        return f"[dim]{label}:[/dim] {value}"
 
     def _format_datetime(value: datetime | None) -> str:
         if value is None:
@@ -44,7 +49,10 @@ def _build_textual_app():
     class SessionListItem(ListItem):
         def __init__(self, session: SessionCandidate):
             self.session = session
-            super().__init__(Static(format_session_item(session)))
+            super().__init__(
+                Static(format_session_item(session)),
+                classes="session-list-item",
+            )
 
         def watch_highlighted(self, highlighted: bool) -> None:
             self.set_class(highlighted, "selected-transcript")
@@ -68,8 +76,13 @@ def _build_textual_app():
             padding: 1 2;
         }
 
+        .session-list-item {
+            padding: 1 1;
+        }
+
         .selected-transcript {
             border: solid #f7c948;
+            padding: 0 0;
         }
 
         .title {
