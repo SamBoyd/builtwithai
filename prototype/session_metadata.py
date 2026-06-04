@@ -97,6 +97,41 @@ def _parse_codex_session(path: Path) -> SessionMetadata:
     )
 
 
+def _parse_claude_code_session(path: Path) -> SessionMetadata:
+    title = None
+    created_at = None
+    updated_at = None
+    cwd = None
+    user_prompt_count = 0
+
+    for row in _read_jsonl(path):
+        timestamp = _parse_timestamp(row.get("timestamp"))
+        if timestamp is not None:
+            created_at = created_at or timestamp
+            updated_at = timestamp
+
+        cwd = cwd or _parse_path(row.get("cwd"))
+
+        if row.get("type") != "user":
+            continue
+
+        message = row.get("message")
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+
+        user_prompt_count += 1
+        title = title or _normalize_title(_claude_code_message_text(message.get("content")))
+
+    return SessionMetadata(
+        title=title,
+        created_at=created_at,
+        updated_at=updated_at,
+        cwd=cwd,
+        user_prompt_count=user_prompt_count,
+        files_edited=(),
+    )
+
+
 def _read_jsonl(path: Path) -> Iterator[CodexRolloutLine]:
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         if not raw_line.strip():
@@ -141,6 +176,19 @@ def _normalize_title(value: object) -> str | None:
     return normalized or None
 
 
+def _claude_code_message_text(content: object) -> str | None:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "text":
+                continue
+            text = block.get("text")
+            if isinstance(text, str) and text.strip():
+                return text
+    return None
+
+
 def _changed_files(payload: dict[str, Any], cwd: Path | None) -> tuple[str, ...]:
     changes = payload.get("changes")
     if not isinstance(changes, dict):
@@ -159,4 +207,5 @@ def _display_path(path: Path, cwd: Path | None) -> str:
 
 _PARSERS: dict[str, Callable[[Path], SessionMetadata]] = {
     "codex": _parse_codex_session,
+    "claude-code": _parse_claude_code_session,
 }
